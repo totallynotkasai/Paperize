@@ -221,7 +221,7 @@ different images; effects change while paused; nothing double-changes.
   builds on it) and kept local like Phase 1. CI was run locally on Windows with the workflow's
   commands (`gradlew clean test`, then `gradlew :app:lintDebug`) plus a debug build: 142/142 unit
   tests pass (112 before; 30 new or rewritten), lint 0 errors and the same 18 warnings as the
-  baseline, debug build successful. One Kotlin compiler warning shows up in a file Phase 2
+  baseline, debug build successful (re-run on the final code, including the device-test fix below). One Kotlin compiler warning shows up in a file Phase 2
   touched: the effect sliders use a `Slider` overload that Material 3 1.5 (alpha) deprecates. It
   is the same overload upstream's code already used; the replacement is a `SliderState` API in
   an alpha release, so it is left for a later dependency update.
@@ -293,6 +293,57 @@ different images; effects change while paused; nothing double-changes.
   change service instead of building intents itself.
 - New text has English and Simplified Chinese versions; the Chinese may want a native speaker's
   polish.
+- Device tests (installed with adb and run with `am instrument`): 40 passed, 0 failed. That is
+  the repository tests (17, 6 of them new for queues, the lock screen's half-way start, passing
+  over the other screen's image, folder scans and pruning), both migration tests, document access,
+  display names, the live shaders, and all 7 UI tests (2 new: interval boxes, and effects greyed
+  out with no screen on). Not run, as before: `WallpaperUtilInstrumentedTest` (sets the
+  wallpaper) and the preferences and scheduler tests (they write to Paperize Debug's real
+  settings and jobs).
+  - **The new interval-box test found a bug** that unit tests couldn't. On the phone, moving from
+    the Hours box to the Mins box briefly reported "focus left", which saved a half-typed value.
+    Fixed in a follow-up commit: focus is tracked per box, and only a loss that lasts past the
+    next frame commits.
+  - **Phase 1's "known issue" is solved.** The UI tests, including the album-cover test that
+    "hung" in Phase 1, were waiting for a test screen that HyperOS refused to open (logcat:
+    `MIUILOG- Permission Denied Activity … Abort background activity starts`). After you allowed
+    Paperize Debug's permissions in Settings → Apps, all 7 pass.
+  - **Side effect, and how to avoid it:** every `am instrument` run ends by force-stopping
+    Paperize Debug. Force-stopping the app that provides the live wallpaper makes the system drop
+    that wallpaper. So the Paperize Debug live wallpaper left on your home screen by the Phase 1
+    check went back to the system's default image when the tests ended. 4.1.1 wasn't affected.
+    Run device tests before setting the Debug live wallpaper, not after.
+- Phone check (2026-10-06, Paperize Debug switched to static mode, album "Phase2" = a folder of
+  red, green and blue PNGs and an SVG). Changes were counted with the wallpaper IDs in `dumpsys
+  wallpaper`, which go up by one each time a screen is set, and jobs were read from `dumpsys
+  jobscheduler`. All passed:
+  - With neither screen on, the effects showed the hint, and Scaling and Visual Effects were
+    greyed out (2.3).
+  - Home on, album Phase2, changing on: Home changed once and Lock not at all. The new Home job's
+    first run was a full hour away, not immediate (2.2).
+  - Lock on with no album yet: nothing changed and Home's job stayed (2.1). Picking Phase2 for
+    Lock changed Lock once and Home not at all. The shared job kept Home's countdown (59m15s
+    left, not a fresh hour) (2.2).
+  - Same album on both screens: Home showed red and Lock blue. Lock started half-way through the
+    album (2.4).
+  - Home off: no change; Lock's job kept the shared countdown. Home back on: its album was still
+    Phase2, Home changed once (to green, avoiding Lock's blue) and Lock didn't (2.1, 2.2, 2.4).
+  - Paused, Home's grey filter on, then the slider set to 77% and to 30%: Home re-rendered once
+    per edit; the slider edits rendered once each about 1.5 s after release, and Lock didn't
+    change. Home kept the green image throughout, and the home screen showed it greyed. 30% was
+    still there after leaving and reopening the app (2.3, 2.9).
+  - Deleting the SVG from the folder and adding a new file, then the folder's Refresh: the SVG
+    went and the new file joined, with no wallpaper change (2.7). Opening the app again shortly
+    after logged "Albums were refreshed 5 min ago; skipping" (2.8).
+  - 4.1.1 was untouched (same version and install time).
+  - Not checked on the phone: the live banner (2.5), onboarding (2.10) and live double-tap /
+    screen-off (2.11). New images joining a round in progress (2.6) and the interval boxes are
+    covered by device tests instead.
+- After the check, Paperize Debug is left in static mode with changing paused, so it won't
+  change anything. Your home screen shows its green test image until 4.1.1's next change, and
+  your lock screen shows its blue test image: to get the HyperOS lock screen back, choose it
+  again in the phone's wallpaper settings. The test folder `Pictures/PaperizePhase2` is still on
+  the phone.
 
 ---
 
