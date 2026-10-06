@@ -12,7 +12,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Problem notifications shared by manual changes and scheduled ones. */
+/**
+ * Problem notifications shared by manual changes and scheduled ones. They go to their own channel,
+ * which makes a sound by default, so they aren't lost among the silent "changing" notices.
+ */
 @Singleton
 class WallpaperNotifier @Inject constructor(
     @param:ApplicationContext private val context: Context
@@ -27,7 +30,7 @@ class WallpaperNotifier @Inject constructor(
 
     /** The wallpaper could not be changed; [message] explains why when known. */
     fun showChangeFailed(message: String?) = show(
-        context.getString(R.string.app_name),
+        context.getString(R.string.change_failed_title),
         message ?: context.getString(R.string.error_no_valid_wallpaper_after_retries)
     )
 
@@ -38,14 +41,15 @@ class WallpaperNotifier @Inject constructor(
             Intent().setClassName(context.packageName, MainActivity::class.java.name),
             PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, Constants.NOTIFICATION_CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, Constants.ALERT_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ERROR)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         notificationManager?.notify(ERROR_NOTIFICATION_ID, notification)
     }

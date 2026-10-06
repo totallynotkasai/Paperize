@@ -1,7 +1,5 @@
 package com.anthonyla.paperize.presentation.screens.wallpaper_view
 
-import android.content.Context
-import android.content.Intent
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,18 +9,23 @@ import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.presentation.common.navigation.WallpaperViewRoute
-import com.anthonyla.paperize.service.wallpaper.WallpaperChangeService
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeEvents
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 @HiltViewModel
 class WallpaperViewViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
-    @param:ApplicationContext private val context: Context,
-    settingsRepository: SettingsRepository
+    settingsRepository: SettingsRepository,
+    private val changeRequests: WallpaperChangeRequests,
+    changeEvents: WallpaperChangeEvents
 ) : ViewModel() {
     private val route = savedStateHandle.toRoute<WallpaperViewRoute>()
 
@@ -32,14 +35,16 @@ class WallpaperViewViewModel @Inject constructor(
         initialValue = WallpaperMode.STATIC
     )
 
+    /** "Set wallpaper" is busy until its result arrives. */
+    val applying: StateFlow<Boolean> = changeEvents.pending
+        .map { it > 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), false)
+
+    /** Collect only while the viewer is visible. */
+    val changeResults: SharedFlow<WallpaperChangeResult> = changeEvents.results
+
     fun applyTo(screenType: ScreenType) {
         require(screenType != ScreenType.LIVE)
-        context.startForegroundService(
-            Intent(context, WallpaperChangeService::class.java).apply {
-                action = WallpaperChangeService.ACTION_APPLY_SPECIFIC_WALLPAPER
-                putExtra(WallpaperChangeService.EXTRA_WALLPAPER_ID, route.wallpaperId)
-                putExtra(WallpaperChangeService.EXTRA_SCREEN_TYPE, screenType.name)
-            }
-        )
+        changeRequests.applySpecific(route.wallpaperId, screenType)
     }
 }

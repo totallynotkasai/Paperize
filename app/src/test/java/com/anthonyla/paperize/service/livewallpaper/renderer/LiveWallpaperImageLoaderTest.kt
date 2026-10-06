@@ -1,5 +1,6 @@
 package com.anthonyla.paperize.service.livewallpaper.renderer
 
+import com.anthonyla.paperize.testing.emptyWallpaper
 import android.graphics.Bitmap
 import com.anthonyla.paperize.core.Result
 import com.anthonyla.paperize.core.ScreenType
@@ -18,8 +19,8 @@ import org.junit.Test
 class LiveWallpaperImageLoaderTest {
     private val repository = mockk<WallpaperRepository>(relaxed = true)
     private val bitmap = mockk<Bitmap>(relaxed = true)
-    private val current = Wallpaper.empty("current", "album").copy(uri = "content://current")
-    private val next = Wallpaper.empty("next", "album").copy(uri = "content://next")
+    private val current = emptyWallpaper("current", "album").copy(uri = "content://current")
+    private val next = emptyWallpaper("next", "album").copy(uri = "content://next")
     private val decoded = mutableListOf<String>()
 
     private fun loader(
@@ -52,7 +53,7 @@ class LiveWallpaperImageLoaderTest {
     @Test fun `advancing skips unreadable images up to the retry limit`() = runTest {
         var dequeued = 0
         coEvery { repository.getAndDequeueWallpaper("album", ScreenType.LIVE) } answers {
-            Wallpaper.empty("image-${dequeued++}", "album")
+            emptyWallpaper("image-${dequeued++}", "album")
         }
         assertNull(loader(LiveSelection.ADVANCE) { false }.load(100, 200))
         assertEquals(Constants.MAX_WALLPAPER_LOAD_RETRIES, decoded.size)

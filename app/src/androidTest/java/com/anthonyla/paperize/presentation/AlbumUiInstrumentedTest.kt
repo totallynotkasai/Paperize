@@ -1,12 +1,13 @@
 package com.anthonyla.paperize.presentation
 
+import com.anthonyla.paperize.testing.emptyAlbumSummary
+import com.anthonyla.paperize.testing.emptyAlbum
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
-import com.anthonyla.paperize.domain.model.AlbumSummary
 import com.anthonyla.paperize.presentation.screens.library.components.AlbumItem
 import java.io.File
 import androidx.compose.runtime.mutableIntStateOf
@@ -31,6 +32,7 @@ import com.anthonyla.paperize.domain.model.Album
 import com.anthonyla.paperize.presentation.screens.library.LibraryScreen
 import kotlinx.coroutines.CompletableDeferred
 import androidx.compose.ui.semantics.SemanticsActions
+import com.anthonyla.paperize.core.ScalingType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.domain.model.AppSettings
 import com.anthonyla.paperize.domain.model.ScheduleSettings
@@ -98,7 +100,7 @@ class AlbumUiInstrumentedTest {
                     assertEquals("Mountains", name)
                     attempts++
                     if (attempts == 1) pending.await()
-                    else Result.Success(Album.empty(id = "album", name = name))
+                    else Result.Success(emptyAlbum(id = "album", name = name))
                 })
             }
         }
@@ -145,17 +147,18 @@ class AlbumUiInstrumentedTest {
         try {
             compose.setContent {
                 PaperizeTheme(false, false) {
-                    AlbumItem(AlbumSummary.empty("album").copy(name = "Cover", coverUri = uri.value), {}, Modifier.size(180.dp))
+                    AlbumItem(emptyAlbumSummary("album").copy(name = "Cover", coverUri = uri.value), {}, Modifier.size(180.dp))
                 }
             }
             fun centerColor(): Int {
-                val pixels = compose.onNodeWithContentDescription("Cover").captureToImage().toPixelMap()
+                // The card is labelled by its name; its centre lies inside the cover.
+                val pixels = compose.onNodeWithText("Cover").captureToImage().toPixelMap()
                 return pixels[pixels.width / 2, pixels.height / 2].toArgb()
             }
             compose.waitUntil(5_000) { centerColor() == Color.RED }
             compose.runOnIdle { uri.value = File(context.cacheDir, "missing-cover.png").toURI().toString() }
             compose.waitUntil(5_000) { centerColor() != Color.RED }
-            compose.onNodeWithContentDescription("Cover").assertIsDisplayed()
+            compose.onNodeWithText("Cover").assertIsDisplayed()
         } finally {
             file.delete()
         }
@@ -214,6 +217,45 @@ class AlbumUiInstrumentedTest {
             .assertIsNotEnabled()
         compose.onNodeWithText(context.getString(R.string.fit)).performScrollTo().assertIsNotEnabled()
         compose.runOnIdle { assertEquals(0, updates) }
+    }
+
+    @Test fun horizontalScrollingIsOfferedOnlyForHomeWithFill() {
+        val settings = mutableStateOf(ScheduleSettings(homeEnabled = true, homeScalingType = ScalingType.FILL))
+        compose.setContent {
+            PaperizeTheme(false, false) {
+                WallpaperScreen(
+                    albums = emptyList(), persistedScheduleSettings = settings.value,
+                    appSettings = AppSettings(), wallpaperMode = WallpaperMode.STATIC,
+                    onToggleChanger = {}, onSelectHomeAlbum = {}, onSelectLockAlbum = {}, onSelectLiveAlbum = {},
+                    onUpdateScheduleSettings = {}, onUpdateSettingsDeferRender = {},
+                    onChangeWallpaperNow = {}, homeWallpaperUri = null, lockWallpaperUri = null
+                )
+            }
+        }
+        val scrolling = context.getString(R.string.horizontal_wallpaper_scrolling)
+        compose.onNodeWithText(scrolling).performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { settings.value = settings.value.copy(homeScalingType = ScalingType.FIT, lockScalingType = ScalingType.FIT) }
+        compose.onNodeWithText(scrolling).assertDoesNotExist()
+        compose.runOnIdle { settings.value = ScheduleSettings(lockEnabled = true) }
+        compose.onNodeWithText(scrolling).assertDoesNotExist()
+    }
+
+    @Test fun screenCardsAnnounceAsSwitches() {
+        compose.setContent {
+            PaperizeTheme(false, false) {
+                WallpaperScreen(
+                    albums = emptyList(), persistedScheduleSettings = ScheduleSettings(homeEnabled = true),
+                    appSettings = AppSettings(), wallpaperMode = WallpaperMode.STATIC,
+                    onToggleChanger = {}, onSelectHomeAlbum = {}, onSelectLockAlbum = {}, onSelectLiveAlbum = {},
+                    onUpdateScheduleSettings = {}, onUpdateSettingsDeferRender = {},
+                    onChangeWallpaperNow = {}, homeWallpaperUri = null, lockWallpaperUri = null
+                )
+            }
+        }
+        compose.onNodeWithText(context.getString(R.string.home)).assertIsOn()
+        compose.onNodeWithText(context.getString(R.string.lock)).assertIsOff()
+        // The state is announced once, by the switch, not again by the visible "Enabled" line.
+        compose.onAllNodesWithText(context.getString(R.string.enabled)).assertCountEquals(0)
     }
 
 }

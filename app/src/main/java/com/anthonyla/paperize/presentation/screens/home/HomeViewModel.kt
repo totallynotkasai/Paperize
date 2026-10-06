@@ -13,7 +13,9 @@ import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.usecase.CreateAlbumUseCase
 import com.anthonyla.paperize.domain.repository.AlbumRepository
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeEvents
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,7 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -44,7 +46,8 @@ class HomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val wallpaperScheduler: WallpaperScheduler,
     private val wallpaperRepository: com.anthonyla.paperize.domain.repository.WallpaperRepository,
-    private val changeRequests: WallpaperChangeRequests
+    private val changeRequests: WallpaperChangeRequests,
+    changeEvents: WallpaperChangeEvents
 ) : ViewModel() {
 
     companion object {
@@ -86,10 +89,18 @@ class HomeViewModel @Inject constructor(
             initialValue = null
         )
 
+    /** "Change wallpaper now" is busy until its result arrives. */
+    val changeInProgress: StateFlow<Boolean> = changeEvents.pending
+        .map { it > 0 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), false)
+
+    /** Outcomes of "Change wallpaper now"; collect only while the screen is visible. */
+    val changeResults: SharedFlow<WallpaperChangeResult> = changeEvents.results
+
     /**
      * URI of the wallpaper Paperize last applied for the home / lock screen, for the in-app preview.
      * Reading the source URI (rather than WallpaperManager.getDrawable) avoids the storage permission
-     * the preview would otherwise need. Falls back to the BOTH-mode record when home/lock are synced.
+     * the preview would otherwise need. Each screen records its own current image.
      * A turned-off screen keeps its album but shows no preview.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -118,14 +129,8 @@ class HomeViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), null)
 
     private fun currentWallpaperUriFlow(albumId: String?, screenType: ScreenType): Flow<String?> =
-        if (albumId == null) {
-            flowOf(null)
-        } else {
-            combine(
-                wallpaperRepository.getCurrentWallpaperFlow(albumId, screenType),
-                wallpaperRepository.getCurrentWallpaperFlow(albumId, ScreenType.BOTH)
-            ) { specific, both -> (specific ?: both)?.uri }
-        }
+        if (albumId == null) flowOf(null)
+        else wallpaperRepository.getCurrentWallpaperFlow(albumId, screenType).map { it?.uri }
 
     private val _showLiveWallpaperPrompt = MutableStateFlow(false)
     val showLiveWallpaperPrompt: StateFlow<Boolean> = _showLiveWallpaperPrompt
@@ -301,14 +306,19 @@ class HomeViewModel @Inject constructor(
         changeRequests.change(screenType, keepSchedule)
 
     /**
-     * Change whichever wallpaper destinations are currently configured.
-     *
-     * Synchronized home/lock settings use one BOTH request; independent schedules are
-     * changed separately. LIVE is routed through the service to reload the renderer.
+     * "Change wallpaper now": every configured destination in one request, so the screen gets one
+     * result to show. BOTH changes each rotating static screen from its own queue and restarts
+     * each one's countdown; LIVE is routed through the service to reload the renderer.
      */
     fun changeWallpaperNowForActiveScreens() {
         val mode = wallpaperMode.value ?: return
-        scheduleSettings.value.activeScreens(mode).forEach { changeWallpaperNow(it) }
+        val screen = when (mode) {
+            WallpaperMode.LIVE -> ScreenType.LIVE.takeIf { scheduleSettings.value.liveAlbumId != null }
+            WallpaperMode.STATIC -> scheduleSettings.value.rotatingStaticScreens().let { screens ->
+                if (screens.size > 1) ScreenType.BOTH else screens.singleOrNull()
+            }
+        } ?: return
+        changeRequests.change(screen, report = true)
     }
 
     private fun reapplyEffectsNow(screens: Collection<ScreenType>) {

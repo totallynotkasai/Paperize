@@ -75,6 +75,31 @@ class ScreenMetricsCompatTest {
     }
 
     @Test
+    fun `before Android 17 only the phone's own display counts, not casting or virtual ones`() {
+        // Android 12-16 return nothing for the built-in category.
+        assertEquals(listOf("default"), displaysForWallpaperSize(emptyList(), "default"))
+        assertEquals(emptyList<String>(), displaysForWallpaperSize(emptyList<String>(), null))
+    }
+
+    @Test
+    fun `Android 17 and later use every built-in panel`() {
+        assertEquals(
+            listOf("inner", "outer"),
+            displaysForWallpaperSize(listOf("inner", "outer"), "outer")
+        )
+    }
+
+    @Test
+    fun `scrolling keeps at most three screens of a panorama and one screen of height`() {
+        // A 12000 x 1500 panorama filled to a 1080 x 2400 screen would be 19200 px wide.
+        assertEquals(3240 to 2400, scrollingCanvasSize(19200, 2400, 1080, 2400))
+        // Images within the cap keep all of their overflow.
+        assertEquals(2000 to 2400, scrollingCanvasSize(2000, 2400, 1080, 2400))
+        // Launchers don't scroll vertically, so a tall image keeps one screen of height.
+        assertEquals(1080 to 2400, scrollingCanvasSize(1080, 9000, 1080, 2400))
+    }
+
+    @Test
     fun `non-fill and lock rendering use exact canvas`() {
         assertFalse(usesLauncherManagedScrolling(ScreenType.HOME, ScalingType.FIT, true))
         assertFalse(usesLauncherManagedScrolling(ScreenType.HOME, ScalingType.STRETCH, true))

@@ -42,7 +42,8 @@ interface SettingsRepository {
 
     suspend fun clearEmptyAlbumSelection(albumId: String, screen: ScreenType)
 
-    suspend fun updateDarkMode(enabled: Boolean)
+    /** [dark] null follows the system setting. */
+    suspend fun updateDarkMode(dark: Boolean?)
     suspend fun updateDynamicTheming(enabled: Boolean)
     suspend fun updateAnimate(enabled: Boolean)
     suspend fun updateFirstLaunch(isFirstLaunch: Boolean)

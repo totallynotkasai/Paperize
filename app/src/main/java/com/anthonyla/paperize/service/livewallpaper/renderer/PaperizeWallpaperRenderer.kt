@@ -1,6 +1,7 @@
 package com.anthonyla.paperize.service.livewallpaper.renderer
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.core.ScalingType
+import com.anthonyla.paperize.core.util.blurRadiusForPercent
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -59,6 +60,7 @@ class PaperizeWallpaperRenderer(
     private var uAlphaHandle = 0
     private var uDarkenFactorHandle = 0
     private var uVignetteFactorHandle = 0
+    private var uVignetteExtentHandle = 0
     private var uGrayscaleFactorHandle = 0
     private var uAdaptiveBrightnessFactorHandle = 0
 
@@ -166,7 +168,7 @@ class PaperizeWallpaperRenderer(
         }
 
         val blurRadius = if (currentEffects.enableBlur) {
-            (currentEffects.blurPercentage / 100.0f) * Constants.MAX_BLUR_RADIUS
+            blurRadiusForPercent(currentEffects.blurPercentage)
         } else {
             0f
         }
@@ -230,7 +232,7 @@ class PaperizeWallpaperRenderer(
         GLES20.glUseProgram(blurProgram)
         GLES20.glUniform2f(blurDirectionHandle, 1f, 0f)
         GLES20.glUniform2f(blurResolutionHandle, surfaceWidth.toFloat(), surfaceHeight.toFloat())
-        GLES20.glUniform1f(blurRadiusHandle, blurRadius)
+        GLES20.glUniform1f(blurRadiusHandle, GLShaders.blurStepForRadius(blurRadius))
         GLES20.glUniform1i(blurTextureHandle, 0)  // Bind texture unit 0
 
         picture.draw(blurProgram, blurPositionHandle, blurTexCoordHandle, mvpMatrix, blurMvpMatrixHandle)
@@ -275,6 +277,8 @@ class PaperizeWallpaperRenderer(
             uVignetteFactorHandle,
             if (currentEffects.enableVignette) currentEffects.vignettePercentage / Constants.PERCENTAGE_DIVISOR else 0f
         )
+        val (extentX, extentY) = GLShaders.vignetteExtent(surfaceWidth, surfaceHeight)
+        GLES20.glUniform2f(uVignetteExtentHandle, extentX, extentY)
         GLES20.glUniform1f(
             uGrayscaleFactorHandle,
             if (currentEffects.enableGrayscale) currentEffects.grayscalePercentage / Constants.PERCENTAGE_DIVISOR else 0f
@@ -339,6 +343,7 @@ class PaperizeWallpaperRenderer(
         uAlphaHandle = GLES20.glGetUniformLocation(effectsProgram, "u_alpha")
         uDarkenFactorHandle = GLES20.glGetUniformLocation(effectsProgram, "u_darkenFactor")
         uVignetteFactorHandle = GLES20.glGetUniformLocation(effectsProgram, "u_vignetteFactor")
+        uVignetteExtentHandle = GLES20.glGetUniformLocation(effectsProgram, "u_vignetteExtent")
         uGrayscaleFactorHandle = GLES20.glGetUniformLocation(effectsProgram, "u_grayscaleFactor")
         uAdaptiveBrightnessFactorHandle = GLES20.glGetUniformLocation(effectsProgram, "u_adaptiveBrightnessFactor")
 

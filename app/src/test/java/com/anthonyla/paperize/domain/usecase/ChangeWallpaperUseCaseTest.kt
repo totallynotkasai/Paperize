@@ -1,5 +1,6 @@
 package com.anthonyla.paperize.domain.usecase
 
+import com.anthonyla.paperize.testing.emptyWallpaper
 import android.content.Context
 import android.graphics.Bitmap
 import com.anthonyla.paperize.core.EmptyAlbumException
@@ -9,7 +10,6 @@ import com.anthonyla.paperize.core.Result
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.domain.model.PreparedWallpaper
 import com.anthonyla.paperize.domain.model.ScheduleSettings
-import com.anthonyla.paperize.domain.model.Wallpaper
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
 import io.mockk.coEvery
@@ -92,7 +92,7 @@ class ChangeWallpaperUseCaseTest {
 
     @Test(expected = kotlinx.coroutines.CancellationException::class)
     fun `cancelled rendering restores the dequeued item without retrying`() = runTest {
-        val wallpaper = com.anthonyla.paperize.domain.model.Wallpaper.empty("image", "album")
+        val wallpaper = emptyWallpaper("image", "album")
         coEvery { repository.getAndDequeueWallpaper("album", ScreenType.HOME) } returns wallpaper
         coEvery { renderer.render(wallpaper, ScreenType.HOME, any()) } throws kotlinx.coroutines.CancellationException()
         try {
@@ -105,7 +105,7 @@ class ChangeWallpaperUseCaseTest {
 
     @Test
     fun `unreadable single image album is not reported as empty`() = runTest {
-        val wallpaper = com.anthonyla.paperize.domain.model.Wallpaper.empty("image", "album")
+        val wallpaper = emptyWallpaper("image", "album")
         var dequeues = 0
         coEvery { repository.getAndDequeueWallpaper("album", ScreenType.HOME) } answers {
             if (dequeues++ % 2 == 0) null else wallpaper
@@ -148,8 +148,8 @@ class ChangeWallpaperUseCaseTest {
 
     @Test
     fun `a screen sharing its album passes over the image the other screen shows`() = runTest {
-        val shown = Wallpaper.empty("shown", "album")
-        val next = Wallpaper.empty("next", "album")
+        val shown = emptyWallpaper("shown", "album")
+        val next = emptyWallpaper("next", "album")
         val bitmap = mockk<Bitmap>(relaxed = true)
         coEvery { repository.getCurrentWallpaper("album", ScreenType.LOCK) } returns shown
         coEvery { repository.getAndDequeueWallpaper("album", ScreenType.HOME, "shown") } returns next
@@ -162,7 +162,7 @@ class ChangeWallpaperUseCaseTest {
 
     @Test
     fun `the other screen's image is used when nothing else can rotate`() = runTest {
-        val shown = Wallpaper.empty("shown", "album")
+        val shown = emptyWallpaper("shown", "album")
         val bitmap = mockk<Bitmap>(relaxed = true)
         coEvery { repository.getCurrentWallpaper("album", ScreenType.HOME) } returns shown
         coEvery { repository.getAndDequeueWallpaper("album", ScreenType.LOCK, "shown") } returns null

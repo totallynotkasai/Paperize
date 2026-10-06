@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,7 @@ import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
 import coil3.request.ImageRequest
 import coil3.size.Size
+import com.anthonyla.paperize.R
 import com.anthonyla.paperize.domain.model.AlbumSummary
 import com.anthonyla.paperize.presentation.common.components.InteractiveCard
 import com.anthonyla.paperize.presentation.theme.AppBorderWidths
@@ -82,14 +84,16 @@ fun AlbumItem(
                 if (coverState is AsyncImagePainter.State.Success) {
                     Image(
                         painter = cover,
-                        contentDescription = album.name,
+                        // The card reads its name and count; the picture adds nothing.
+                        contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Filled.PhotoAlbum,
-                        contentDescription = album.name,
+                        // The card reads its name and count; the picture adds nothing.
+                        contentDescription = null,
                         modifier = Modifier.fillMaxSize(0.45f),
                         tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
                     )
@@ -105,6 +109,13 @@ fun AlbumItem(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = pluralStringResource(R.plurals.wallpaper_count, album.wallpaperCount, album.wallpaperCount),
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

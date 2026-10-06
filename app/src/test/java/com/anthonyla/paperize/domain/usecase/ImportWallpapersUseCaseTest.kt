@@ -1,9 +1,11 @@
 package com.anthonyla.paperize.domain.usecase
 
+import com.anthonyla.paperize.testing.emptyWallpaper
+import com.anthonyla.paperize.testing.emptyFolder
+import com.anthonyla.paperize.testing.emptyAlbum
 import com.anthonyla.paperize.core.Result
 import com.anthonyla.paperize.core.WallpaperSourceType
 import com.anthonyla.paperize.core.constants.Constants
-import com.anthonyla.paperize.domain.model.Album
 import com.anthonyla.paperize.domain.model.Folder
 import com.anthonyla.paperize.domain.model.Wallpaper
 import com.anthonyla.paperize.domain.repository.AlbumRepository
@@ -131,7 +133,7 @@ class ImportWallpapersUseCaseTest {
 
     @Test fun `folder import keeps metadata and assigns membership`() = runTest {
         coEvery { documents.retainReadPermission("tree") } just Runs
-        every { repository.getAlbumById("album") } returns flowOf(Album.empty("album"))
+        every { repository.getAlbumById("album") } returns flowOf(emptyAlbum("album"))
         coEvery { documents.readFolder("tree", any()) } returns
             SourceFolder("Photos", listOf(SourceImage("image", "photo.png", 42L)), skippedUnsupported = 2)
         coEvery { repository.addFolderToAlbum(any(), any(), any()) } returns Result.Success(true)
@@ -150,8 +152,8 @@ class ImportWallpapersUseCaseTest {
 
     @Test fun `existing folder restores access without rescanning`() = runTest {
         coEvery { documents.retainReadPermission("tree") } just Runs
-        every { repository.getAlbumById("album") } returns flowOf(Album.empty("album").copy(
-            folders = listOf(Folder.empty().copy(uri = "tree"))
+        every { repository.getAlbumById("album") } returns flowOf(emptyAlbum("album").copy(
+            folders = listOf(emptyFolder().copy(uri = "tree"))
         ))
         val result = useCase.addFolder("album", "tree", {}, { _, _ -> })
         assertTrue(result.alreadyInAlbum)
@@ -163,7 +165,7 @@ class ImportWallpapersUseCaseTest {
 
     @Test fun `failed and cancelled scans do not save a partial folder or keep its grant`() = runTest {
         coEvery { documents.retainReadPermission("tree") } just Runs
-        every { repository.getAlbumById("album") } returns flowOf(Album.empty("album"))
+        every { repository.getAlbumById("album") } returns flowOf(emptyAlbum("album"))
         for (failure in listOf(java.io.IOException("Unavailable"), CancellationException("Cancelled"))) {
             coEvery { documents.readFolder("tree", any()) } throws failure
             try {
@@ -176,11 +178,11 @@ class ImportWallpapersUseCaseTest {
     }
 
     @Test fun `restoring access matches by uri, then by name, and relinks moved files`() = runTest {
-        val lostSame = Wallpaper.empty("same", "album").copy(uri = "content://same", fileName = "a.jpg", accessLost = true)
-        val lostMoved = Wallpaper.empty("moved", "album").copy(uri = "content://old", fileName = "b.jpg", accessLost = true)
-        val readable = Wallpaper.empty("fine", "album").copy(uri = "content://fine", fileName = "c.jpg")
+        val lostSame = emptyWallpaper("same", "album").copy(uri = "content://same", fileName = "a.jpg", accessLost = true)
+        val lostMoved = emptyWallpaper("moved", "album").copy(uri = "content://old", fileName = "b.jpg", accessLost = true)
+        val readable = emptyWallpaper("fine", "album").copy(uri = "content://fine", fileName = "c.jpg")
         every { repository.getAlbumById("album") } returns
-            flowOf(Album.empty("album").copy(wallpapers = listOf(lostSame, lostMoved, readable)))
+            flowOf(emptyAlbum("album").copy(wallpapers = listOf(lostSame, lostMoved, readable)))
         coEvery { documents.readImage("content://new") } returns SourceImage("content://new", "b.jpg", 1L)
         coEvery { documents.readImage("content://other") } returns SourceImage("content://other", "zzz.jpg", 1L)
         coEvery { documents.retainReadPermission(any()) } just Runs
@@ -200,8 +202,8 @@ class ImportWallpapersUseCaseTest {
     }
 
     @Test fun `restoring a folder only grants folders already in the album`() = runTest {
-        every { repository.getAlbumById("album") } returns flowOf(Album.empty("album").copy(
-            folders = listOf(Folder.empty("folder", "album").copy(uri = "tree"))
+        every { repository.getAlbumById("album") } returns flowOf(emptyAlbum("album").copy(
+            folders = listOf(emptyFolder("folder", "album").copy(uri = "tree"))
         ))
         coEvery { documents.retainReadPermission("tree") } just Runs
 

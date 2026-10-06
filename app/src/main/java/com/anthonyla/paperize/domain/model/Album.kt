@@ -13,12 +13,4 @@ data class Album(
     /** Overrides the Home, Lock and Live effects wherever this album is shown (plan 5.3). */
     val effects: WallpaperEffects? = null,
     val favoritesMode: FavoritesMode = FavoritesMode.MARKER_ONLY
-) {
-    companion object {
-        fun empty(id: String = "", name: String = "") = Album(
-            id = id,
-            name = name,
-            coverUri = null
-        )
-    }
-}
+)

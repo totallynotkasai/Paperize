@@ -2,7 +2,7 @@ package com.anthonyla.paperize.presentation.screens.wallpaper.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +38,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
@@ -125,7 +126,7 @@ private fun AlbumSelectionItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .selectable(selected = isSelected, onClick = onClick, role = Role.RadioButton)
             .padding(horizontal = AppSpacing.extraLarge, vertical = AppSpacing.medium),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
@@ -145,14 +146,14 @@ private fun AlbumSelectionItem(
             if (coverState is AsyncImagePainter.State.Success) {
                 Image(
                         painter = cover,
-                        contentDescription = album.name,
+                        contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.size(AppIconSizes.extraLarge)
                 )
             } else {
                 Icon(
                     imageVector = Icons.Filled.PhotoAlbum,
-                    contentDescription = album.name,
+                    contentDescription = null,
                     modifier = Modifier.size(AppIconSizes.medium),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                 )
@@ -179,7 +180,8 @@ private fun AlbumSelectionItem(
 
         Icon(
             imageVector = if (isSelected) Icons.Filled.CheckCircle else Icons.Outlined.Circle,
-            contentDescription = if (isSelected) stringResource(R.string.currently_selected_album) else null,
+            // The row itself reports selection, so this icon is decoration.
+            contentDescription = null,
             tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

@@ -261,9 +261,11 @@ class PreferencesManager @Inject constructor(
         }
     }
 
-    suspend fun updateDarkMode(enabled: Boolean) {
+    /** [dark] null removes the choice, so the app follows the system setting. */
+    suspend fun updateDarkMode(dark: Boolean?) {
         dataStore.edit { prefs ->
-            prefs[booleanPreferencesKey(PreferenceKeys.DARK_MODE)] = enabled
+            val key = booleanPreferencesKey(PreferenceKeys.DARK_MODE)
+            if (dark == null) prefs.remove(key) else prefs[key] = dark
         }
     }
 

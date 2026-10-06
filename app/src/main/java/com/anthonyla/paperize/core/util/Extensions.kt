@@ -14,23 +14,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resumeWithException
 
-fun Uri.isValid(contentResolver: ContentResolver): Boolean {
-    if (scheme != "content") return false
-    
-    return try {
-        contentResolver.query(this, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-            cursor.moveToFirst()
-        } ?: false
-    } catch (_: Exception) {
-        // Fallback to opening the stream if the provider doesn't support the specific query
-        try {
-            contentResolver.openFileDescriptor(this, "r")?.use { true } ?: false
-        } catch (_: Exception) {
-            false
-        }
-    }
-}
-
 /** Only a successful, complete query with no rows proves that a document was removed. */
 fun Uri.isDocumentMissing(contentResolver: ContentResolver): Boolean {
     if (scheme != ContentResolver.SCHEME_CONTENT) return false

@@ -33,7 +33,7 @@ class SettingsViewModel @Inject constructor(
     val appSettings: StateFlow<AppSettings?> = settingsRepository.getAppSettingsFlow()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Eagerly,  // Start loading immediately to prevent onboarding flicker
+            started = SharingStarted.Eagerly,
             initialValue = null
         )
 
@@ -44,9 +44,10 @@ class SettingsViewModel @Inject constructor(
             initialValue = WallpaperMode.STATIC
         )
 
-    fun updateDarkMode(enabled: Boolean) {
+    /** [dark] null follows the system setting. */
+    fun updateDarkMode(dark: Boolean?) {
         viewModelScope.launch {
-            settingsRepository.updateDarkMode(enabled)
+            settingsRepository.updateDarkMode(dark)
         }
     }
 
@@ -59,12 +60,6 @@ class SettingsViewModel @Inject constructor(
     fun updateAnimate(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.updateAnimate(enabled)
-        }
-    }
-
-    fun updateFirstLaunch(isFirstLaunch: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.updateFirstLaunch(isFirstLaunch)
         }
     }
 

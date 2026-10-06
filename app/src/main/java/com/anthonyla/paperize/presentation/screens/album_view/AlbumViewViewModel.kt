@@ -9,7 +9,6 @@ import com.anthonyla.paperize.domain.usecase.ImportResult
 import com.anthonyla.paperize.domain.usecase.ImportWallpapersUseCase
 import com.anthonyla.paperize.domain.usecase.DeleteAlbumUseCase
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -25,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -46,7 +46,8 @@ class AlbumViewViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val albumRepository: AlbumRepository,
     private val importWallpapersUseCase: ImportWallpapersUseCase,
-    private val deleteAlbumUseCase: DeleteAlbumUseCase
+    private val deleteAlbumUseCase: DeleteAlbumUseCase,
+    private val imports: AlbumImports
 ) : ViewModel() {
 
     companion object {
@@ -80,8 +81,10 @@ class AlbumViewViewModel @Inject constructor(
     private val _selectedFolders = MutableStateFlow<Set<String>>(emptySet())
     val selectedFolders: StateFlow<Set<String>> = _selectedFolders.asStateFlow()
 
-    private val _importProgress = MutableStateFlow<ImportProgress>(ImportProgress.Idle)
-    val importProgress: StateFlow<ImportProgress> = _importProgress.asStateFlow()
+    /** Imports run in [AlbumImports], so they carry on if this screen is left. */
+    val importProgress: StateFlow<ImportProgress> = imports.state(albumId)
+        .map { it.progress }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ImportProgress.Idle)
 
     private val _message = MutableStateFlow<UiText?>(null)
     val message = _message.asStateFlow()
@@ -91,7 +94,6 @@ class AlbumViewViewModel @Inject constructor(
     val isDeleting = _isDeleting.asStateFlow()
     private val _albumDeleted = MutableStateFlow(false)
     val albumDeleted = _albumDeleted.asStateFlow()
-    private var importJob: Job? = null
 
     init {
         // Grants can disappear while the app is closed; check before showing the album.
@@ -100,54 +102,44 @@ class AlbumViewViewModel @Inject constructor(
                 Log.e(TAG, "Could not check file access", it.exception)
             }
         }
+        // An import may have finished while the album was closed; its outcome waits until now.
+        viewModelScope.launch {
+            imports.state(albumId).mapNotNull { it.outcome }.collect { outcome ->
+                showOutcome(outcome)
+                imports.consumeOutcome(albumId)
+            }
+        }
     }
+
+    private fun showOutcome(outcome: ImportOutcome) {
+        when (outcome) {
+            is ImportOutcome.Finished -> {
+                _message.value = importMessage(outcome.result)
+                if (outcome.result.nearGrantLimit) _grantNotice.value = GrantNotice.NearLimit(outcome.result.grantsInUse)
+            }
+            is ImportOutcome.LimitReached -> _grantNotice.value = GrantNotice.LimitReached(outcome.needed, outcome.available)
+            is ImportOutcome.Failed -> _message.value = UiText.Resource(
+                if (outcome.permissionProblem) R.string.import_permission_error else R.string.import_failed
+            )
+        }
+    }
+
+    private val isImporting: Boolean get() = imports.isRunning(albumId)
 
     fun dismissMessage() { _message.value = null }
 
     fun dismissGrantNotice() { _grantNotice.value = null }
 
     fun addWallpapers(uris: List<String>) {
-        if (uris.isEmpty()) return
-        import(ImportProgress.Saving(0, uris.size)) {
-            importWallpapersUseCase.addImages(albumId, uris) { saved, total ->
-                _importProgress.value = ImportProgress.Saving(saved, total)
-            }
-        }
+        if (uris.isEmpty() || _isDeleting.value) return
+        _message.value = null
+        imports.addImages(albumId, uris)
     }
 
     fun addFolder(uri: String) {
-        import(ImportProgress.Scanning(0)) {
-            importWallpapersUseCase.addFolder(
-                albumId, uri,
-                onScanning = { _importProgress.value = ImportProgress.Scanning(it) },
-                onSaving = { saved, total -> _importProgress.value = ImportProgress.Saving(saved, total) }
-            )
-        }
-    }
-
-    private fun import(initialProgress: ImportProgress, block: suspend () -> ImportResult) {
-        if (importJob?.isCompleted == false || _isDeleting.value) return
+        if (_isDeleting.value) return
         _message.value = null
-        _importProgress.value = initialProgress
-        importJob = viewModelScope.launch {
-            try {
-                val result = block()
-                _message.value = importMessage(result)
-                if (result.nearGrantLimit) _grantNotice.value = GrantNotice.NearLimit(result.grantsInUse)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: GrantLimitException) {
-                _grantNotice.value = GrantNotice.LimitReached(e.needed, e.available)
-            } catch (e: SecurityException) {
-                Log.e(TAG, "Import permission failed", e)
-                _message.value = UiText.Resource(R.string.import_permission_error)
-            } catch (e: Exception) {
-                Log.e(TAG, "Import failed", e)
-                _message.value = UiText.Resource(R.string.import_failed)
-            }
-        }.also { job ->
-            job.invokeOnCompletion { _importProgress.value = ImportProgress.Idle }
-        }
+        imports.addFolder(albumId, uri)
     }
 
     private fun importMessage(result: ImportResult): UiText? = when {
@@ -159,7 +151,7 @@ class AlbumViewViewModel @Inject constructor(
         else -> null
     }
 
-    fun cancelImport() { importJob?.cancel() }
+    fun cancelImport() = imports.cancel(albumId)
 
     /** [uri] is the folder the user picked to grant access again. */
     fun restoreFolderAccess(uri: String) = restoreAccess {
@@ -198,7 +190,7 @@ class AlbumViewViewModel @Inject constructor(
     }
 
     fun deleteAlbum() {
-        if (_isDeleting.value || importJob?.isCompleted == false) return
+        if (_isDeleting.value || isImporting) return
         _message.value = null
         _isDeleting.value = true
         viewModelScope.launch {
@@ -259,7 +251,7 @@ class AlbumViewViewModel @Inject constructor(
     }
 
     private fun removeItems(wallpaperIds: List<String>, folderIds: List<String>) {
-        if (_isDeleting.value || importJob?.isCompleted == false) return
+        if (_isDeleting.value || isImporting) return
         _message.value = null
         if (wallpaperIds.isEmpty() && folderIds.isEmpty()) return
         _isDeleting.value = true

@@ -36,8 +36,6 @@
   <string name="delete_album_question">Delete album?</string>
   <string name="animation">Animation</string>
   <string name="increase_visual_appeal">Increase visual appeal</string>
-  <string name="dark_mode">Dark Mode</string>
-  <string name="easier_on_the_eyes">Easier on the eyes</string>
   <string name="material_you">Material You</string>
   <string name="dynamic_theming">Dynamic Theming</string>
   <string name="click_here_to_view_our_privacy_policy">Click here to view our privacy policy</string>
@@ -148,7 +146,7 @@
   <string name="live_short_interval_note">Intervals under 15 minutes run only while Paperize is the visible live wallpaper.</string>
 
   <!-- Notification Service -->
-  <string name="notification_channel_description">Wallpaper change notifications</string>
+  <string name="notification_channel_description">Shown briefly while Paperize changes your wallpaper.</string>
   <string name="no_wallpapers_in_album">No wallpapers in album</string>
   <string name="wallpaper_changer_disabled_empty_album">Wallpaper changer has been disabled because the album is empty.</string>
 
@@ -279,4 +277,29 @@
   <string name="set_live_wallpaper">Set live wallpaper</string>
   <string name="app_info">App info</string>
   <string name="effects_need_a_screen">Turn on Home or Lock above to change the effects.</string>
+
+  <!-- UI polish (fork plan 3.2–3.6, 3.13) -->
+  <string name="theme">Theme</string>
+  <string name="theme_description">Follow your phone\'s setting, or always use light or dark.</string>
+  <string name="theme_system">System</string>
+  <string name="theme_light">Light</string>
+  <string name="theme_dark">Dark</string>
+  <string name="wallpaper_changed">Wallpaper changed</string>
+  <string name="wallpaper_set">Wallpaper set</string>
+  <string name="setting_wallpaper">Setting wallpaper…</string>
+  <string name="change_feedback_live_not_set">Nothing changed, because Paperize isn\'t your live wallpaper.</string>
+  <string name="change_feedback_nothing">Nothing to change. Turn on a screen and pick an album first.</string>
+  <string name="change_failed">Couldn\'t change the wallpaper.</string>
+  <string name="change_failed_with_reason">Couldn\'t change the wallpaper: %1$s</string>
+  <string name="change_failed_title">Couldn\'t change the wallpaper</string>
+  <string name="notification_channel_activity">Wallpaper changes</string>
+  <string name="notification_channel_alerts">Problems</string>
+  <string name="notification_channel_alerts_description">When Paperize can\'t change your wallpaper, or an album has run out of images.</string>
+  <string name="tile_label">Next wallpaper</string>
+  <string name="tile_on">On</string>
+  <string name="tile_paused">Paused</string>
+  <string name="tile_no_album">No album</string>
+  <string name="content_desc_folder">Folder %1$s, %2$s</string>
+  <string name="import_hide">Hide</string>
+  <string name="import_continues_hint">You can leave this screen. Adding carries on while Paperize is open.</string>
 </resources>

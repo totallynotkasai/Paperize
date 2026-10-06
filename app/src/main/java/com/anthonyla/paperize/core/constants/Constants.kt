@@ -9,7 +9,8 @@ object Constants {
     const val PREFERENCES_NAME = "paperize_preferences"
 
     // Notifications
-    const val NOTIFICATION_CHANNEL_ID = "paperize_channel"
+    const val NOTIFICATION_CHANNEL_ID = "paperize_channel"  // silent "changing wallpaper" notices
+    const val ALERT_CHANNEL_ID = "paperize_alerts"  // problems; audible by default
     const val NOTIFICATION_ID = 1
 
     // Services
@@ -58,11 +59,8 @@ object Constants {
 
     // UI
     const val ANIMATION_DURATION_LONG_MS = 800  // For item reordering animations
-    const val DEBOUNCE_DELAY_MS = 500L
-    const val PERMISSION_SCREEN_TRANSITION_DELAY_MS = 300L  // Brief delay for permission screen transitions
     /** Settings are saved at once; re-rendering the static wallpaper waits this long for more edits. */
     const val SETTINGS_DEBOUNCE_MS = 1500L
-    const val WALLPAPER_CHANGE_DEBOUNCE_MS = 2000L
     const val WALLPAPER_ASPECT_RATIO = 9f / 16f  // Standard phone aspect ratio
     const val GRID_THUMBNAIL_WIDTH = 300
     const val GRID_THUMBNAIL_HEIGHT = 500
@@ -75,7 +73,9 @@ object Constants {
     const val MINUTES_PER_DAY = 1440
 
     // Image processing
-    const val MAX_BLUR_RADIUS = 25.0f
+    const val MAX_BLUR_RADIUS = 25.0f  // pixels at 100%, as Android blur radii (see blurRadiusToSigma)
+    /** Horizontal scrolling keeps at most this many screens of a wide image (panoramas are cropped). */
+    const val MAX_SCROLLING_WIDTH_SCREENS = 3
     const val BRIGHTNESS_SAMPLE_SIZE = 10  // Pixel sample size for brightness calculation
 
     // Luminance coefficients (ITU-R BT.709 standard)
@@ -96,9 +96,6 @@ object Constants {
     const val VIGNETTE_OUTER_ALPHA = 0.8f  // Outer alpha for vignette gradient
     val VIGNETTE_GRADIENT_POSITIONS = floatArrayOf(0f, 0.7f, 1f)  // Vignette gradient positions
 
-    // Wallpaper loading retry
-    const val WALLPAPER_READ_INITIAL_DELAY_MS = 500L  // Initial retry delay (with linear backoff)
-
     // Input validation
     const val MAX_DAYS_INPUT_LENGTH = 3
     const val MAX_HOURS_MINUTES_INPUT_LENGTH = 2
@@ -117,7 +114,6 @@ object Constants {
     // oldest beyond that, so imports stop before the limit and warn as it gets close.
     const val MAX_PERSISTED_URI_GRANTS = 512
     const val PERSISTED_URI_GRANT_WARNING = 400
-    const val MAX_QUEUE_REBUILD_ATTEMPTS = 2
 }
 
 object PreferenceKeys {

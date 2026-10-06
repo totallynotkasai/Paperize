@@ -34,7 +34,6 @@ import android.view.Display
 import android.view.WindowManager
 import android.view.WindowMetrics
 import androidx.compose.ui.util.fastRoundToInt
-import androidx.core.graphics.scale
 import androidx.exifinterface.media.ExifInterface
 import com.anthonyla.paperize.core.ScalingType
 
@@ -116,24 +115,12 @@ object ScreenMetricsCompat {
         // over currentWindowMetrics so a scheduled change while a landscape game is foregrounded
         // cannot permanently rotate and over-crop the wallpaper bitmap.
         val displayManager = context.getSystemService(DisplayManager::class.java)
-        val builtInDisplays = displayManager
-            ?.getDisplays(BUILT_IN_DISPLAY_CATEGORY)
-            .orEmpty()
-        val candidateDisplays = if (builtInDisplays.isNotEmpty()) {
-            // Android 17+ returns all built-in panels, including currently inactive panels.
-            builtInDisplays.asSequence()
-        } else {
-            // Compatibility fallback for releases where the built-in category is unknown.
-            // Exclude presentation and app-owned virtual displays.
-            displayManager?.displays
-                ?.asSequence()
-                ?.filter { display ->
-                    display.flags and Display.FLAG_PRESENTATION == 0 &&
-                        display.flags and Display.FLAG_PRIVATE == 0
-                }
-                .orEmpty()
-        }
+        val candidateDisplays = displaysForWallpaperSize(
+            builtInDisplays = displayManager?.getDisplays(BUILT_IN_DISPLAY_CATEGORY).orEmpty().toList(),
+            defaultDisplay = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+        )
         val supportedModes = candidateDisplays
+            .asSequence()
             .flatMap { display ->
                 display.supportedModes.asSequence().map { mode ->
                     mode.physicalWidth to mode.physicalHeight
@@ -144,6 +131,15 @@ object ScreenMetricsCompat {
         return Size(selected.first, selected.second)
     }
 }
+
+/**
+ * The displays whose size the wallpaper must cover. Android 17+ lists every built-in panel, folded
+ * away or not. Android 12–16 don't know that category (it comes back empty), and their full display
+ * list also holds casting, mirroring and other virtual displays, which can be far larger than the
+ * phone (a 4K TV). There only the default display is known to be the phone's own panel.
+ */
+internal fun <D> displaysForWallpaperSize(builtInDisplays: List<D>, defaultDisplay: D?): List<D> =
+    builtInDisplays.ifEmpty { listOfNotNull(defaultDisplay) }
 
 internal fun selectWallpaperDisplayDimensions(
     currentWindow: Pair<Int, Int>,
@@ -207,13 +203,21 @@ fun retrieveBitmap(
                 info.size.width, info.size.height, width, height, scaling
             )
             decoder.setTargetSize(targetW, targetH)
-            // Crop during decode to avoid allocating fill-scale overflow.
-            if (scaling == ScalingType.FILL && !preserveSourceOverflow &&
-                (targetW > width || targetH > height)
-            ) {
-                val cropX = ((targetW - width) / 2).coerceAtLeast(0)
-                val cropY = ((targetH - height) / 2).coerceAtLeast(0)
-                decoder.setCrop(android.graphics.Rect(cropX, cropY, cropX + width, cropY + height))
+            // Crop during decode so Fill never allocates overflow it won't keep: none without
+            // scrolling, and at most a few screens' width with it (a panorama could exhaust memory).
+            if (scaling == ScalingType.FILL) {
+                val (keepW, keepH) = if (preserveSourceOverflow) {
+                    scrollingCanvasSize(targetW, targetH, width, height)
+                } else {
+                    width to height
+                }
+                val cropW = minOf(targetW, keepW)
+                val cropH = minOf(targetH, keepH)
+                if (cropW < targetW || cropH < targetH) {
+                    val cropX = (targetW - cropW) / 2
+                    val cropY = (targetH - cropH) / 2
+                    decoder.setCrop(android.graphics.Rect(cropX, cropY, cropX + cropW, cropY + cropH))
+                }
             }
 
             decoder.isMutableRequired = true
@@ -260,10 +264,23 @@ fun retrieveBitmap(
 }
 
 /**
- * Scale [source] just enough to cover one screen while retaining any overflow.
- *
- * The returned bitmap may be wider than [width] or taller than [height]. That overflow is what a
- * launcher uses to scroll a static wallpaper without moving past the source image's real edge.
+ * The part of a Fill image, scaled to cover the screen ([scaledWidth] × [scaledHeight]), that is
+ * kept for launcher scrolling: centred, at most [maxScreens] screens wide and one screen tall.
+ * Launchers only scroll sideways, and an uncapped panorama could need hundreds of megabytes.
+ */
+internal fun scrollingCanvasSize(
+    scaledWidth: Int,
+    scaledHeight: Int,
+    screenWidth: Int,
+    screenHeight: Int,
+    maxScreens: Int = Constants.MAX_SCROLLING_WIDTH_SCREENS
+): Pair<Int, Int> =
+    minOf(scaledWidth, screenWidth * maxScreens) to minOf(scaledHeight, screenHeight)
+
+/**
+ * Scale [source] just enough to cover one screen while retaining sideways overflow, up to
+ * [scrollingCanvasSize]. That overflow is what a launcher uses to scroll a static wallpaper
+ * without moving past the source image's real edge. Consumes [source].
  */
 private fun scaleToFillPreservingOverflow(
     source: Bitmap,
@@ -274,13 +291,20 @@ private fun scaleToFillPreservingOverflow(
         width.toFloat() / source.width,
         height.toFloat() / source.height
     )
-    val targetW = (source.width * scale).fastRoundToInt()
-    val targetH = (source.height * scale).fastRoundToInt()
-    if (targetW == source.width && targetH == source.height) return source
+    val scaledW = (source.width * scale).fastRoundToInt()
+    val scaledH = (source.height * scale).fastRoundToInt()
+    val (canvasW, canvasH) = scrollingCanvasSize(scaledW, scaledH, width, height)
+    if (canvasW == source.width && canvasH == source.height) return source
 
-    val scaled = source.scale(targetW, targetH)
-    if (scaled !== source) source.recycle()
-    return scaled
+    // Draw straight into the capped canvas; a full-size scaled copy could itself run out of memory.
+    val left = (canvasW - scaledW) / 2f
+    val top = (canvasH - scaledH) / 2f
+    val result = createBitmap(canvasW, canvasH)
+    Canvas(result).drawBitmap(
+        source, null, RectF(left, top, left + scaledW, top + scaledH), Paint(Paint.FILTER_BITMAP_FLAG)
+    )
+    source.recycle()
+    return result
 }
 
 /** Render either decoder's output onto the requested canvas; consumes [source]. */
@@ -335,14 +359,18 @@ private fun applyExifOrientation(source: Bitmap, uri: Uri, context: Context): Bi
 fun darkenBitmap(source: Bitmap, darkenPercent: Int): Bitmap =
     adjustBitmapBrightness(source, (100 - darkenPercent.coerceIn(0, 100)) / 100f)
 
+/** The blur radius in pixels for a 0–100 strength; static and live wallpapers share it. */
+internal fun blurRadiusForPercent(percent: Int): Float =
+    (percent.coerceIn(0, 100) / 100f) * Constants.MAX_BLUR_RADIUS
+
 /**
- * Blur the bitmap using GPU acceleration
+ * Blur on the CPU, for when the GPU pipeline failed: asking the GPU again would only fail again.
  * @param percent 0-100
  */
-fun blurBitmap(source: Bitmap, percent: Int): Bitmap {
+private fun blurBitmapOnCpu(source: Bitmap, percent: Int): Bitmap {
     if (percent <= 0) return source
     return try {
-        processBitmapGpu(source, false, 0, true, percent, false, 0, false, 0)
+        blurBitmapCpu(source, blurRadiusForPercent(percent))
     } catch (e: Exception) {
         Log.e(TAG, "Error blurring bitmap", e)
         source
@@ -546,7 +574,7 @@ private fun processBitmapGpu(
         }
 
         if (hasBlur) {
-            val radius = (blurPercent.coerceIn(0, 100) / 100f) * Constants.MAX_BLUR_RADIUS
+            val radius = blurRadiusForPercent(blurPercent)
             val blurEffect = RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
             effect = if (effect != null) {
                 RenderEffect.createChainEffect(blurEffect, effect)
@@ -615,7 +643,7 @@ private fun processBitmapCpu(
 
     if (hasBlur) {
         val previous = result
-        result = blurBitmap(result, blurPercent)
+        result = blurBitmapOnCpu(result, blurPercent)
         if (result !== previous && previous !== source) {
             previous.recycle()
         }

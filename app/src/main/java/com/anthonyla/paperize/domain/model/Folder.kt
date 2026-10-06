@@ -17,15 +17,4 @@ data class Folder(
         get() = Uri.decode(name).let { decoded ->
             decoded.substringAfterLast('/', decoded.substringAfterLast(':', decoded))
         }
-
-    companion object {
-        fun empty(id: String = "", albumId: String = "") = Folder(
-            id = id,
-            albumId = albumId,
-            name = "",
-            uri = "",
-            coverUri = null,
-            dateModified = 0L
-        )
-    }
 }

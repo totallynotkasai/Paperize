@@ -1,5 +1,7 @@
 package com.anthonyla.paperize.data.repository
 
+import com.anthonyla.paperize.testing.emptyWallpaper
+import com.anthonyla.paperize.testing.emptyFolder
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -9,8 +11,6 @@ import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.data.database.PaperizeDatabase
 import com.anthonyla.paperize.data.database.entities.AlbumEntity
 import com.anthonyla.paperize.data.mapper.toEntity
-import com.anthonyla.paperize.domain.model.Folder
-import com.anthonyla.paperize.domain.model.Wallpaper
 import com.anthonyla.paperize.domain.source.DocumentSource
 import com.anthonyla.paperize.domain.source.SourceFolder
 import com.anthonyla.paperize.domain.source.SourceImage
@@ -35,8 +35,8 @@ class AlbumRepositoryInstrumentedTest {
 
     @Test fun cancellingAChunkedFolderImportRollsBackAllRows() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
-        val folder = Folder.empty("folder", "album").copy(
-            wallpapers = (0..599).map { Wallpaper.empty("image-$it", "album").copy(folderId = "folder", uri = "content://image-$it") }
+        val folder = emptyFolder("folder", "album").copy(
+            wallpapers = (0..599).map { emptyWallpaper("image-$it", "album").copy(folderId = "folder", uri = "content://image-$it") }
         )
         try {
             albums.addFolderToAlbum("album", folder) { saved, _ ->
@@ -51,10 +51,10 @@ class AlbumRepositoryInstrumentedTest {
 
     @Test fun importingImagesUpdatesCoverAndRotationQueueTogether() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
-        val first = Wallpaper.empty("first", "album").copy(uri = "content://first")
+        val first = emptyWallpaper("first", "album").copy(uri = "content://first")
         db.wallpaperDao().insertWallpaper(first.toEntity())
         db.wallpaperQueueDao().rebuildQueue("album", ScreenType.HOME, listOf("first"))
-        db.folderDao().insertFolder(Folder.empty("folder", "album").toEntity())
+        db.folderDao().insertFolder(emptyFolder("folder", "album").toEntity())
         val second = first.copy(id = "second", uri = "content://second", folderId = "folder")
 
         assertEquals(Result.Success(1), albums.addWallpapersToAlbum("album", listOf(second)))
@@ -67,7 +67,7 @@ class AlbumRepositoryInstrumentedTest {
     @Test fun newImagesJoinTheRoundsInProgressAtTheirPlace() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
         albums.addWallpapersToAlbum("album", listOf(image("d1"), image("d2"))).getOrThrow()
-        albums.addFolderToAlbum("album", Folder.empty("f1", "album").copy(uri = "content://tree1", wallpapers = listOf(image("f1a"), image("f1b")))).getOrThrow()
+        albums.addFolderToAlbum("album", emptyFolder("f1", "album").copy(uri = "content://tree1", wallpapers = listOf(image("f1a"), image("f1b")))).getOrThrow()
         wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
         assertEquals("d1", wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)?.id)
 
@@ -110,7 +110,7 @@ class AlbumRepositoryInstrumentedTest {
     @Test fun folderRefreshRemovesOnlyFilesTheScanNoLongerFinds() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
         albums.addWallpapersToAlbum("album", listOf(image("direct"))).getOrThrow()
-        albums.addFolderToAlbum("album", Folder.empty("f1", "album").copy(uri = "content://tree1",
+        albums.addFolderToAlbum("album", emptyFolder("f1", "album").copy(uri = "content://tree1",
             wallpapers = listOf(image("gone"), image("kept"), image("also-gone")))).getOrThrow()
 
         assertEquals(2, albums.removeFolderImagesNotIn("f1", setOf("content://kept", "content://new")).getOrThrow())
@@ -123,7 +123,7 @@ class AlbumRepositoryInstrumentedTest {
         val tracked = AlbumRepositoryImpl(FakeDocumentSource(missing = setOf("content://direct", "content://in-folder")), db)
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
         tracked.addWallpapersToAlbum("album", listOf(image("direct"), image("other"))).getOrThrow()
-        tracked.addFolderToAlbum("album", Folder.empty("folder", "album").copy(uri = "content://tree", wallpapers = listOf(image("in-folder")))).getOrThrow()
+        tracked.addFolderToAlbum("album", emptyFolder("folder", "album").copy(uri = "content://tree", wallpapers = listOf(image("in-folder")))).getOrThrow()
 
         assertEquals(1, tracked.pruneMissingEntries("album").getOrThrow())
         assertNull(db.wallpaperDao().getWallpaperById("direct"))
@@ -133,7 +133,7 @@ class AlbumRepositoryInstrumentedTest {
     @Test fun removingCoverUsesOnlyWallpapersFromThatAlbum() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("one", "One", "content://shared"))
         db.albumDao().insertAlbum(AlbumEntity("two", "Two", "content://shared"))
-        val cover = Wallpaper.empty("cover", "one").copy(uri = "content://shared")
+        val cover = emptyWallpaper("cover", "one").copy(uri = "content://shared")
         val replacement = cover.copy(id = "replacement", uri = "content://replacement", displayOrder = 1)
         db.wallpaperDao().insertWallpapers(listOf(cover, replacement, cover.copy(id = "other", albumId = "two")).map { it.toEntity() })
 
@@ -145,8 +145,8 @@ class AlbumRepositoryInstrumentedTest {
 
     @Test fun coverRefreshUsesDisplayOrderAndClearsEmptyFolders() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
-        db.folderDao().insertFolder(Folder.empty("folder", "album").toEntity())
-        val later = Wallpaper.empty("later", "album").copy(folderId = "folder", uri = "content://later", displayOrder = 9)
+        db.folderDao().insertFolder(emptyFolder("folder", "album").toEntity())
+        val later = emptyWallpaper("later", "album").copy(folderId = "folder", uri = "content://later", displayOrder = 9)
         val first = later.copy(id = "first", uri = "content://first", displayOrder = 1)
         val direct = later.copy(id = "direct", folderId = null, uri = "content://direct", displayOrder = 99)
         db.wallpaperDao().insertWallpapers(listOf(later, first, direct).map { it.toEntity() })
@@ -162,13 +162,13 @@ class AlbumRepositoryInstrumentedTest {
 
     @Test fun concurrentImportsDeduplicateInsideTheTransaction() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
-        val image = Wallpaper.empty("one", "album").copy(uri = "content://same")
+        val image = emptyWallpaper("one", "album").copy(uri = "content://same")
         val first = async(Dispatchers.IO) { albums.addWallpapersToAlbum("album", listOf(image)).getOrThrow() }
         val second = async(Dispatchers.IO) { albums.addWallpapersToAlbum("album", listOf(image.copy(id = "two"))).getOrThrow() }
         assertEquals(1, first.await() + second.await())
         assertEquals(1, db.wallpaperDao().getWallpaperCountByAlbum("album"))
 
-        db.folderDao().insertFolder(Folder.empty("folder", "album").toEntity())
+        db.folderDao().insertFolder(emptyFolder("folder", "album").toEntity())
         assertEquals(Result.Success(1), albums.addWallpapersToAlbum("album", listOf(image.copy(id = "folder-image", folderId = "folder"))))
         db.folderDao().deleteFolderById("folder")
         assertEquals(Result.Success(0), albums.addWallpapersToAlbum("album", listOf(image.copy(id = "stale", folderId = "folder"))))
@@ -176,9 +176,9 @@ class AlbumRepositoryInstrumentedTest {
 
     @Test fun reorderPersistsNestedImagesWithoutOverwritingMetadata() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
-        val first = Wallpaper.empty("first", "album").copy(uri = "content://first", folderId = "folder")
+        val first = emptyWallpaper("first", "album").copy(uri = "content://first", folderId = "folder")
         val second = first.copy(id = "second", uri = "content://second")
-        val folder = Folder.empty("folder", "album").copy(wallpapers = listOf(first, second))
+        val folder = emptyFolder("folder", "album").copy(wallpapers = listOf(first, second))
         albums.addFolderToAlbum("album", folder).getOrThrow()
         wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
         db.wallpaperDao().updateWallpaper(first.copy(fileName = "new-name.jpg").toEntity())
@@ -192,7 +192,7 @@ class AlbumRepositoryInstrumentedTest {
 
     @Test fun failedReorderRollsBackEarlierRowsAndPreservesQueue() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
-        val first = Wallpaper.empty("first", "album").copy(uri = "content://first")
+        val first = emptyWallpaper("first", "album").copy(uri = "content://first")
         val second = first.copy(id = "second", uri = "content://second")
         albums.addWallpapersToAlbum("album", listOf(first, second)).getOrThrow()
         wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
@@ -208,7 +208,7 @@ class AlbumRepositoryInstrumentedTest {
     @Test fun concurrentQueueCreationShufflesEachScreenOnceAndDoesNotRefillConsumedItems() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
         albums.addWallpapersToAlbum("album", (1..8).map {
-            Wallpaper.empty("image-$it", "album").copy(uri = "content://image-$it")
+            emptyWallpaper("image-$it", "album").copy(uri = "content://image-$it")
         }).getOrThrow()
         val home = async(Dispatchers.IO) { wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, true).getOrThrow() }
         val lock = async(Dispatchers.IO) { wallpapers.ensureWallpaperQueue("album", ScreenType.LOCK, true).getOrThrow() }
@@ -239,13 +239,13 @@ class AlbumRepositoryInstrumentedTest {
     }
 
     private fun image(id: String, folderId: String? = null, album: String = "album") =
-        Wallpaper.empty(id, album).copy(uri = "content://$id", folderId = folderId)
+        emptyWallpaper(id, album).copy(uri = "content://$id", folderId = folderId)
 
     @Test fun newFilesJoinTheEndOfTheirOwnGroup() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
         albums.addWallpapersToAlbum("album", listOf(image("d1"), image("d2"))).getOrThrow()
-        albums.addFolderToAlbum("album", Folder.empty("f1", "album").copy(uri = "content://tree1", wallpapers = listOf(image("f1a"), image("f1b")))).getOrThrow()
-        albums.addFolderToAlbum("album", Folder.empty("f2", "album").copy(uri = "content://tree2", wallpapers = listOf(image("f2a")))).getOrThrow()
+        albums.addFolderToAlbum("album", emptyFolder("f1", "album").copy(uri = "content://tree1", wallpapers = listOf(image("f1a"), image("f1b")))).getOrThrow()
+        albums.addFolderToAlbum("album", emptyFolder("f2", "album").copy(uri = "content://tree2", wallpapers = listOf(image("f2a")))).getOrThrow()
 
         albums.addWallpapersToAlbum("album", listOf(image("d3"), image("f1c", folderId = "f1"))).getOrThrow()
 
@@ -262,8 +262,8 @@ class AlbumRepositoryInstrumentedTest {
         db.albumDao().insertAlbum(AlbumEntity("two", "Two", null))
         tracked.addWallpapersToAlbum("one", listOf(image("shared", album = "one"), image("only-one", album = "one"))).getOrThrow()
         tracked.addWallpapersToAlbum("two", listOf(image("shared", album = "two").copy(id = "shared-2"))).getOrThrow()
-        tracked.addFolderToAlbum("one", Folder.empty("tree-one", "one").copy(uri = "content://tree", wallpapers = listOf(image("in-tree", "tree-one", "one")))).getOrThrow()
-        tracked.addFolderToAlbum("two", Folder.empty("tree-two", "two").copy(uri = "content://tree")).getOrThrow()
+        tracked.addFolderToAlbum("one", emptyFolder("tree-one", "one").copy(uri = "content://tree", wallpapers = listOf(image("in-tree", "tree-one", "one")))).getOrThrow()
+        tracked.addFolderToAlbum("two", emptyFolder("tree-two", "two").copy(uri = "content://tree")).getOrThrow()
 
         tracked.removeWallpapersFromAlbum("one", listOf("only-one")).getOrThrow()
         assertEquals(listOf("content://only-one"), documents.released)
@@ -282,7 +282,7 @@ class AlbumRepositoryInstrumentedTest {
         val tracked = AlbumRepositoryImpl(documents, db)
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
         tracked.addWallpapersToAlbum("album", listOf(image("direct"), image("other"))).getOrThrow()
-        tracked.addFolderToAlbum("album", Folder.empty("folder", "album").copy(uri = "content://tree", wallpapers = listOf(image("in-folder")))).getOrThrow()
+        tracked.addFolderToAlbum("album", emptyFolder("folder", "album").copy(uri = "content://tree", wallpapers = listOf(image("in-folder")))).getOrThrow()
         wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
 
         // "other" never had a grant; the folder's grant covers its image.

@@ -51,6 +51,7 @@ import com.anthonyla.paperize.presentation.screens.album_view.components.AccessB
 import com.anthonyla.paperize.presentation.screens.album_view.components.AlbumViewTopBar
 import com.anthonyla.paperize.presentation.screens.album_view.components.FolderItem
 import com.anthonyla.paperize.presentation.screens.album_view.components.GrantNoticeDialog
+import com.anthonyla.paperize.presentation.screens.album_view.components.ImportProgressCard
 import com.anthonyla.paperize.presentation.screens.album_view.components.ImportProgressDialog
 import com.anthonyla.paperize.presentation.screens.album_view.components.SortBottomSheet
 import com.anthonyla.paperize.presentation.screens.album_view.components.SortOption
@@ -84,6 +85,11 @@ fun AlbumViewScreen(
     val albumDeleted by viewModel.albumDeleted.collectAsStateWithLifecycle()
     var showDeleteAlbumDialog by rememberSaveable { mutableStateOf(false) }
     var showRemoveUnavailableDialog by rememberSaveable { mutableStateOf(false) }
+    // Hiding the import dialog leaves a progress card in the grid; the next import shows it again.
+    var importDialogHidden by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(importProgress is ImportProgress.Idle) {
+        if (importProgress is ImportProgress.Idle) importDialogHidden = false
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val messageText = message?.asString()
     LaunchedEffect(messageText) {
@@ -199,11 +205,19 @@ fun AlbumViewScreen(
                 hint = stringResource(R.string.album_empty_hint),
                 modifier = modifier.padding(paddingValues)
             ) {
-                FilledTonalButton(onClick = { imagePickerLauncher.launch(arrayOf("image/*")) }) {
-                    Text(stringResource(R.string.add_wallpapers))
-                }
-                TextButton(onClick = { folderPickerLauncher.launch(null) }) {
-                    Text(stringResource(R.string.add_folder))
+                if (importDialogHidden && importProgress !is ImportProgress.Idle) {
+                    ImportProgressCard(
+                        progress = importProgress,
+                        onShow = { importDialogHidden = false },
+                        onCancel = viewModel::cancelImport
+                    )
+                } else {
+                    FilledTonalButton(onClick = { imagePickerLauncher.launch(arrayOf("image/*")) }) {
+                        Text(stringResource(R.string.add_wallpapers))
+                    }
+                    TextButton(onClick = { folderPickerLauncher.launch(null) }) {
+                        Text(stringResource(R.string.add_folder))
+                    }
                 }
             }
             return@Scaffold
@@ -275,6 +289,15 @@ fun AlbumViewScreen(
             horizontalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing),
             verticalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing)
         ) {
+            if (importDialogHidden && importProgress !is ImportProgress.Idle) {
+                item(key = "import-progress", span = { GridItemSpan(maxLineSpan) }) {
+                    ImportProgressCard(
+                        progress = importProgress,
+                        onShow = { importDialogHidden = false },
+                        onCancel = viewModel::cancelImport
+                    )
+                }
+            }
             if (accessIssues.unavailableImages > 0 && !isSelectionMode) {
                 item(key = "access-banner", span = { GridItemSpan(maxLineSpan) }) {
                     AccessBanner(
@@ -304,7 +327,13 @@ fun AlbumViewScreen(
         )
     }
 
-    ImportProgressDialog(progress = importProgress, onCancel = viewModel::cancelImport)
+    if (!importDialogHidden) {
+        ImportProgressDialog(
+            progress = importProgress,
+            onCancel = viewModel::cancelImport,
+            onHide = { importDialogHidden = true }
+        )
+    }
 
     grantNotice?.let { notice ->
         GrantNoticeDialog(

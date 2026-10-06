@@ -1,5 +1,7 @@
 package com.anthonyla.paperize.domain.model
 
+import com.anthonyla.paperize.testing.emptyWallpaper
+import com.anthonyla.paperize.testing.emptyFolder
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -11,8 +13,8 @@ class DisplayNameInstrumentedTest {
             "Pictures/Summer+Sun.jpg" to "Summer+Sun.jpg",
             "" to ""
         ).forEach { (stored, displayed) ->
-            assertEquals(displayed, Folder.empty().copy(name = stored).displayName)
-            assertEquals(displayed, Wallpaper.empty().copy(fileName = stored).displayFileName)
+            assertEquals(displayed, emptyFolder().copy(name = stored).displayName)
+            assertEquals(displayed, emptyWallpaper().copy(fileName = stored).displayFileName)
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.anthonyla.paperize.presentation.screens.sort
 
+import com.anthonyla.paperize.testing.emptyAlbum
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
@@ -48,7 +49,7 @@ class SortViewModelTest {
         viewModel.saveChanges()
         runCurrent()
         coVerify(exactly = 0) { albums.reorderAlbum(any(), any(), any()) }
-        albumReady.complete(Album.empty("album"))
+        albumReady.complete(emptyAlbum("album"))
         runCurrent()
         val completion = CompletableDeferred<Result<Unit>>()
         coEvery { albums.reorderAlbum(any(), any(), any()) } coAnswers { completion.await() }
@@ -65,7 +66,7 @@ class SortViewModelTest {
     }
 
     @Test fun `failed save keeps screen open and permits retry`() = runTest {
-        albumReady.complete(Album.empty("album"))
+        albumReady.complete(emptyAlbum("album"))
         runCurrent()
         coEvery { albums.reorderAlbum(any(), any(), any()) } returns Result.Error(IllegalStateException())
         viewModel.saveChanges()

@@ -1,6 +1,5 @@
 package com.anthonyla.paperize.presentation.screens.settings
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -154,11 +153,9 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(AppSpacing.medium))
 
-            SettingSwitchItem(
-                title = stringResource(R.string.dark_mode),
-                description = stringResource(R.string.easier_on_the_eyes),
-                checked = appSettings?.darkMode ?: isSystemInDarkTheme(),
-                onCheckedChange = { viewModel.updateDarkMode(it) }
+            ThemeModeSetting(
+                darkMode = appSettings?.darkMode,
+                onSelect = viewModel::updateDarkMode
             )
 
             Spacer(modifier = Modifier.height(AppSpacing.extraSmall))
@@ -377,6 +374,53 @@ fun SettingsScreen(
                     }
                 }
             )
+        }
+    }
+}
+
+/** System / Light / Dark. [darkMode] null follows the phone's setting. */
+@Composable
+private fun ThemeModeSetting(darkMode: Boolean?, onSelect: (Boolean?) -> Unit) {
+    val options = listOf(
+        null to R.string.theme_system,
+        false to R.string.theme_light,
+        true to R.string.theme_dark
+    )
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = AppSpacing.small, vertical = AppSpacing.extraSmall),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(AppSpacing.large),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.extraSmall)) {
+                Text(
+                    text = stringResource(R.string.theme),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = stringResource(R.string.theme_description),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                options.forEachIndexed { index, (value, label) ->
+                    SegmentedButton(
+                        selected = darkMode == value,
+                        onClick = { onSelect(value) },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                    ) {
+                        Text(stringResource(label), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
         }
     }
 }

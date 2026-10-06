@@ -36,8 +36,6 @@
   <string name="delete_album_question">删除相册？</string>
   <string name="animation">动画</string>
   <string name="increase_visual_appeal">提升视觉观感</string>
-  <string name="dark_mode">深色模式</string>
-  <string name="easier_on_the_eyes">更护眼</string>
   <string name="material_you">Material You</string>
   <string name="dynamic_theming">动态取色</string>
   <string name="click_here_to_view_our_privacy_policy">点击此处查看我们的隐私政策</string>
@@ -147,7 +145,7 @@
   <string name="live_short_interval_note">低于 15 分钟的间隔仅在 Paperize 作为可见的动态壁纸运行时生效。</string>
 
   <!-- Notification Service -->
-  <string name="notification_channel_description">壁纸更换通知</string>
+  <string name="notification_channel_description">Paperize 更换壁纸时短暂显示。</string>
   <string name="no_wallpapers_in_album">相册中没有壁纸</string>
   <string name="wallpaper_changer_disabled_empty_album">相册为空，壁纸更换已停用。</string>
 
@@ -271,4 +269,29 @@
   <string name="set_live_wallpaper">设置动态壁纸</string>
   <string name="app_info">应用信息</string>
   <string name="effects_need_a_screen">请先在上方开启主屏幕或锁屏，再更改效果。</string>
+
+  <!-- UI polish (fork plan 3.2–3.6, 3.13) -->
+  <string name="theme">主题</string>
+  <string name="theme_description">跟随手机设置，或始终使用浅色或深色。</string>
+  <string name="theme_system">跟随系统</string>
+  <string name="theme_light">浅色</string>
+  <string name="theme_dark">深色</string>
+  <string name="wallpaper_changed">壁纸已更换</string>
+  <string name="wallpaper_set">壁纸已设置</string>
+  <string name="setting_wallpaper">正在设置壁纸…</string>
+  <string name="change_feedback_live_not_set">Paperize 不是当前的动态壁纸，因此没有任何变化。</string>
+  <string name="change_feedback_nothing">没有可更换的内容。请先开启一个屏幕并选择相册。</string>
+  <string name="change_failed">无法更换壁纸。</string>
+  <string name="change_failed_with_reason">无法更换壁纸：%1$s</string>
+  <string name="change_failed_title">无法更换壁纸</string>
+  <string name="notification_channel_activity">壁纸更换</string>
+  <string name="notification_channel_alerts">问题</string>
+  <string name="notification_channel_alerts_description">Paperize 无法更换壁纸，或相册中已没有图片时通知。</string>
+  <string name="tile_label">下一张壁纸</string>
+  <string name="tile_on">开启</string>
+  <string name="tile_paused">已暂停</string>
+  <string name="tile_no_album">无相册</string>
+  <string name="content_desc_folder">文件夹 %1$s，%2$s</string>
+  <string name="import_hide">隐藏</string>
+  <string name="import_continues_hint">你可以离开此页面。只要 Paperize 处于打开状态，添加就会继续。</string>
 </resources>

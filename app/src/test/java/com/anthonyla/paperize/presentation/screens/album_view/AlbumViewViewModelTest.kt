@@ -1,5 +1,6 @@
 package com.anthonyla.paperize.presentation.screens.album_view
 
+import com.anthonyla.paperize.testing.emptyAlbum
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
@@ -7,7 +8,6 @@ import androidx.navigation.toRoute
 import com.anthonyla.paperize.presentation.common.navigation.AlbumRoute
 import com.anthonyla.paperize.R
 import com.anthonyla.paperize.core.Result
-import com.anthonyla.paperize.domain.model.Album
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.usecase.DeleteAlbumUseCase
 import com.anthonyla.paperize.domain.usecase.GrantLimitException
@@ -16,6 +16,8 @@ import com.anthonyla.paperize.domain.usecase.ImportWallpapersUseCase
 import com.anthonyla.paperize.presentation.common.util.UiText
 import io.mockk.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
@@ -38,13 +40,21 @@ class AlbumViewViewModelTest {
         Dispatchers.setMain(StandardTestDispatcher())
         mockkStatic(Log::class)
         every { Log.e(any(), any(), any()) } returns 0
-        every { albums.getAlbumById("album") } returns flowOf(Album.empty("album"))
+        every { albums.getAlbumById("album") } returns flowOf(emptyAlbum("album"))
         coEvery { albums.syncAccess("album") } returns Result.Success(0)
-        val savedState = SavedStateHandle()
         mockkStatic("androidx.navigation.SavedStateHandleKt")
-        every { savedState.toRoute<AlbumRoute>() } returns AlbumRoute("album")
-        viewModel = AlbumViewViewModel(savedState, albums, imports, delete)
+        // Runs imports on the test's main dispatcher, so advanceUntilIdle drives them.
+        albumImports = AlbumImports(imports, CoroutineScope(SupervisorJob() + Dispatchers.Main))
+        viewModel = albumViewModel()
         store.put("album", viewModel)
+    }
+
+    private lateinit var albumImports: AlbumImports
+
+    private fun albumViewModel(): AlbumViewViewModel {
+        val savedState = SavedStateHandle()
+        every { savedState.toRoute<AlbumRoute>() } returns AlbumRoute("album")
+        return AlbumViewViewModel(savedState, albums, imports, delete, albumImports)
     }
 
     @After fun tearDown() {
@@ -139,6 +149,48 @@ class AlbumViewViewModelTest {
         advanceUntilIdle()
         assertNull(viewModel.message.value)
         assertEquals(GrantNotice.LimitReached(needed = 5, available = 2), viewModel.grantNotice.value)
+    }
+
+    @Test fun `an import carries on when the album is closed and reports when it is opened again`() = runTest {
+        val finish = CompletableDeferred<ImportResult>()
+        coEvery { imports.addImages(any(), any(), any()) } coAnswers { finish.await() }
+        viewModel.addWallpapers(listOf("image"))
+        runCurrent()
+        store.clear()  // Leaving the album clears its view model.
+        runCurrent()
+        assertTrue(albumImports.isRunning("album"))
+
+        finish.complete(ImportResult(added = 1, skippedUnsupported = 2))
+        advanceUntilIdle()
+        assertFalse(albumImports.isRunning("album"))
+
+        val reopened = albumViewModel()
+        store.put("reopened", reopened)
+        advanceUntilIdle()
+        assertEquals(UiText.Plural(R.plurals.import_skipped_unsupported, 2), reopened.message.value)
+
+        // Shown once: opening the album again later doesn't repeat it.
+        val again = albumViewModel()
+        store.put("again", again)
+        advanceUntilIdle()
+        assertNull(again.message.value)
+    }
+
+    @Test fun `a reopened album shows an import still in progress`() = runTest {
+        coEvery { imports.addImages(any(), any(), any()) } coAnswers {
+            thirdArg<(Int, Int) -> Unit>()(1, 4)
+            awaitCancellation()
+        }
+        viewModel.addWallpapers(listOf("a", "b", "c", "d"))
+        runCurrent()
+        val reopened = albumViewModel()
+        store.put("reopened", reopened)
+        runCurrent()
+        assertEquals(ImportProgress.Saving(1, 4), reopened.importProgress.value)
+        reopened.cancelImport()
+        advanceUntilIdle()
+        assertEquals(ImportProgress.Idle, reopened.importProgress.value)
+        assertEquals(ImportProgress.Idle, viewModel.importProgress.value)
     }
 
     @Test fun `a selection with only unsupported files says so`() = runTest {

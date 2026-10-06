@@ -1,16 +1,17 @@
 package com.anthonyla.paperize.presentation.screens.home
 
+import com.anthonyla.paperize.testing.emptyAlbumSummary
 import android.content.Context
 import androidx.lifecycle.ViewModelStore
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.core.constants.Constants
-import com.anthonyla.paperize.domain.model.AlbumSummary
 import com.anthonyla.paperize.domain.model.AppSettings
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeEvents
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import io.mockk.*
@@ -54,7 +55,7 @@ class HomeViewModelTest {
             stored.value
         }
         every { wallpapers.getCurrentWallpaperFlow(any(), any()) } returns flowOf(null)
-        viewModel = HomeViewModel(mockk<Context>(), albums, mockk(), settings, scheduler, wallpapers, requests)
+        viewModel = HomeViewModel(mockk<Context>(), albums, mockk(), settings, scheduler, wallpapers, requests, WallpaperChangeEvents())
         store.put("home", viewModel)
     }
 
@@ -70,7 +71,7 @@ class HomeViewModelTest {
         viewModel.updateScheduleSettings(draft, deferRender = true)
         viewModel.toggleWallpaperChanger(false)
         runCurrent()
-        viewModel.selectHomeAlbum(AlbumSummary.empty("new"))
+        viewModel.selectHomeAlbum(emptyAlbumSummary("new"))
         advanceUntilIdle()
 
         assertFalse(stored.value.enableChanger)
@@ -99,7 +100,7 @@ class HomeViewModelTest {
 
     @Test fun `picking an album for a new screen changes only that screen and keeps its countdown`() = runTest {
         stored.value = stored.value.copy(enableChanger = true, lockEnabled = true)
-        viewModel.selectLockAlbum(AlbumSummary.empty("old"))
+        viewModel.selectLockAlbum(emptyAlbumSummary("old"))
         advanceUntilIdle()
         coVerifyOrder {
             scheduler.updateSchedules(match { it.lockAlbumId == "old" }, WallpaperMode.STATIC, false)
@@ -111,7 +112,7 @@ class HomeViewModelTest {
 
     @Test fun `picking another album for a rotating screen restarts its countdown`() = runTest {
         stored.value = stored.value.copy(enableChanger = true)
-        viewModel.selectHomeAlbum(AlbumSummary.empty("new"))
+        viewModel.selectHomeAlbum(emptyAlbumSummary("new"))
         advanceUntilIdle()
         verify(exactly = 1) { requests.change(ScreenType.HOME, keepSchedule = false) }
     }
@@ -186,11 +187,50 @@ class HomeViewModelTest {
         stored.value = stored.value.copy(homeEffects = stored.value.homeEffects.copy(blurPercentage = 60))
         runCurrent()
         verify(exactly = 1) { wallpapers.getCurrentWallpaperFlow("old", ScreenType.HOME) }
-        verify(exactly = 1) { wallpapers.getCurrentWallpaperFlow("old", ScreenType.BOTH) }
 
         stored.value = stored.value.copy(homeAlbumId = "new")
         runCurrent()
         verify(exactly = 1) { wallpapers.getCurrentWallpaperFlow("new", ScreenType.HOME) }
-        verify(exactly = 1) { wallpapers.getCurrentWallpaperFlow("new", ScreenType.BOTH) }
+        // Each screen records its own current image; nothing is ever recorded for "both".
+        verify(exactly = 0) { wallpapers.getCurrentWallpaperFlow(any(), ScreenType.BOTH) }
+    }
+
+    @Test fun `change now sends one reported request covering every rotating screen`() = runTest {
+        // The screen collects these; their values only follow the settings while collected.
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.wallpaperMode.collect() }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.scheduleSettings.collect() }
+        stored.value = stored.value.copy(enableChanger = true, lockEnabled = true, lockAlbumId = "lock", separateSchedules = true)
+        runCurrent()
+        viewModel.changeWallpaperNowForActiveScreens()
+        verify(exactly = 1) { requests.change(ScreenType.BOTH, keepSchedule = false, report = true) }
+
+        stored.value = stored.value.copy(lockEnabled = false)
+        runCurrent()
+        viewModel.changeWallpaperNowForActiveScreens()
+        verify(exactly = 1) { requests.change(ScreenType.HOME, keepSchedule = false, report = true) }
+    }
+
+    @Test fun `change now does nothing while no screen can rotate`() = runTest {
+        // The screen collects these; their values only follow the settings while collected.
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.wallpaperMode.collect() }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.scheduleSettings.collect() }
+        stored.value = stored.value.copy(homeEnabled = false)
+        runCurrent()
+        viewModel.changeWallpaperNowForActiveScreens()
+        verify(exactly = 0) { requests.change(any(), any(), any()) }
+    }
+
+    @Test fun `change now is busy until its result arrives`() = runTest {
+        val events = WallpaperChangeEvents()
+        val busyViewModel = HomeViewModel(mockk<Context>(), albums, mockk(), settings, scheduler, wallpapers, requests, events)
+        store.put("busy", busyViewModel)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { busyViewModel.changeInProgress.collect() }
+        assertFalse(busyViewModel.changeInProgress.value)
+        events.begin()
+        runCurrent()
+        assertTrue(busyViewModel.changeInProgress.value)
+        events.end()
+        runCurrent()
+        assertFalse(busyViewModel.changeInProgress.value)
     }
 }

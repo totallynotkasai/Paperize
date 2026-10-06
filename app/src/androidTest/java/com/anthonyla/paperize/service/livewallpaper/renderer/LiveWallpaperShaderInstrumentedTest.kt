@@ -240,18 +240,72 @@ class LiveWallpaperShaderInstrumentedTest {
         }
     }
 
+    @Test
+    fun liveVignetteMatchesTheStaticVignette() {
+        val texture = createTexture(solidBitmap(Color.WHITE))
+        val program = GLUtil.createProgram(GLShaders.VERTEX_SHADER, GLShaders.EFFECTS_FRAGMENT_SHADER)
+        try {
+            for (percent in listOf(20, 50, 100)) {
+                val static = com.anthonyla.paperize.core.util.vignetteBitmap(solidBitmap(Color.WHITE), percent)
+                drawEffects(program, texture, vignette = percent / 100f)
+                for ((x, y) in listOf(SIZE / 2 to SIZE / 2, 0 to 0, SIZE - 1 to SIZE / 2, 10 to 20, 20 to 5)) {
+                    // GL rows count from the bottom, bitmap rows from the top; the vignette is symmetric.
+                    val live = Color.red(readPixel(x, SIZE - 1 - y))
+                    val expected = Color.red(static.getPixel(x, y))
+                    assertTrue(
+                        "At $percent% ($x, $y) live $live vs static $expected",
+                        kotlin.math.abs(live - expected) <= 6
+                    )
+                }
+                static.recycle()
+            }
+        } finally {
+            GLES20.glDeleteProgram(program)
+            GLES20.glDeleteTextures(1, intArrayOf(texture), 0)
+        }
+    }
+
+    @Test
+    fun vignetteIsTheSameHoweverThePictureIsDrawn() {
+        // With blur, the effects pass draws a screen-sized copy; without, the picture itself, which
+        // under Fill or parallax overflows the screen. The vignette must follow the screen.
+        val texture = createTexture(solidBitmap(Color.WHITE))
+        val program = GLUtil.createProgram(GLShaders.VERTEX_SHADER, GLShaders.EFFECTS_FRAGMENT_SHADER)
+        val overflowing = FloatArray(16).also {
+            Matrix.setIdentityM(it, 0)
+            Matrix.translateM(it, 0, 0.4f, 0f, 0f)
+            Matrix.scaleM(it, 0, 2.5f, 1.2f, 1f)
+        }
+        try {
+            val points = listOf(0 to 0, SIZE / 2 to SIZE / 2, SIZE - 1 to 10, 12 to SIZE - 3)
+            drawEffects(program, texture, vignette = 0.6f)
+            val screenSized = points.map { (x, y) -> Color.red(readPixel(x, y)) }
+            drawEffects(program, texture, vignette = 0.6f, mvp = overflowing)
+            val overflow = points.map { (x, y) -> Color.red(readPixel(x, y)) }
+            screenSized.zip(overflow).forEach { (a, b) ->
+                assertTrue("screen-sized $screenSized vs overflowing $overflow", kotlin.math.abs(a - b) <= 2)
+            }
+        } finally {
+            GLES20.glDeleteProgram(program)
+            GLES20.glDeleteTextures(1, intArrayOf(texture), 0)
+        }
+    }
+
     private fun drawEffects(
         program: Int,
         texture: Int,
         darken: Float = 0f,
         vignette: Float = 0f,
         grayscale: Float = 0f,
-        adaptiveBrightness: Float = 1f
+        adaptiveBrightness: Float = 1f,
+        mvp: FloatArray? = null
     ) {
-        prepareDraw(program, texture)
+        prepareDraw(program, texture, mvp)
         GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "u_alpha"), 1f)
         GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "u_darkenFactor"), darken)
         GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "u_vignetteFactor"), vignette)
+        val (extentX, extentY) = GLShaders.vignetteExtent(SIZE, SIZE)
+        GLES20.glUniform2f(GLES20.glGetUniformLocation(program, "u_vignetteExtent"), extentX, extentY)
         GLES20.glUniform1f(GLES20.glGetUniformLocation(program, "u_grayscaleFactor"), grayscale)
         GLES20.glUniform1f(
             GLES20.glGetUniformLocation(program, "u_adaptiveBrightnessFactor"),
@@ -268,7 +322,7 @@ class LiveWallpaperShaderInstrumentedTest {
         finishDraw(program)
     }
 
-    private fun prepareDraw(program: Int, texture: Int) {
+    private fun prepareDraw(program: Int, texture: Int, mvp: FloatArray? = null) {
         GLES20.glClearColor(0f, 0f, 0f, 1f)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         GLES20.glUseProgram(program)
@@ -276,12 +330,12 @@ class LiveWallpaperShaderInstrumentedTest {
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture)
         GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "u_texture"), 0)
 
-        val identity = FloatArray(16).also { Matrix.setIdentityM(it, 0) }
+        val matrix = mvp ?: FloatArray(16).also { Matrix.setIdentityM(it, 0) }
         GLES20.glUniformMatrix4fv(
             GLES20.glGetUniformLocation(program, "u_mvpMatrix"),
             1,
             false,
-            identity,
+            matrix,
             0
         )
 

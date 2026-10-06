@@ -63,8 +63,8 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun clearEmptyAlbumSelection(albumId: String, screen: ScreenType) =
         preferencesManager.clearEmptyAlbumSelection(albumId, screen)
 
-    override suspend fun updateDarkMode(enabled: Boolean) =
-        preferencesManager.updateDarkMode(enabled)
+    override suspend fun updateDarkMode(dark: Boolean?) =
+        preferencesManager.updateDarkMode(dark)
 
     override suspend fun updateDynamicTheming(enabled: Boolean) =
         preferencesManager.updateDynamicTheming(enabled)

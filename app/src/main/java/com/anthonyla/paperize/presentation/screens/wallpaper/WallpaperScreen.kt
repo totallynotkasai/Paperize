@@ -35,6 +35,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.anthonyla.paperize.core.constants.Constants
@@ -76,7 +82,8 @@ fun WallpaperScreen(
     lockWallpaperUri: String?,
     modifier: Modifier = Modifier,
     liveWallpaperUri: String? = null,
-    liveWallpaperNotSet: Boolean = false
+    liveWallpaperNotSet: Boolean = false,
+    changeInProgress: Boolean = false
 ) {
     var albumSelectionContext by rememberSaveable { mutableStateOf<AlbumSelectionContext?>(null) }
     var showEmptyAlbumWarning by rememberSaveable { mutableStateOf(false) }
@@ -254,18 +261,6 @@ fun WallpaperScreen(
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = AppSpacing.small))
-        if (wallpaperMode == WallpaperMode.STATIC) {
-            SettingSwitchItem(
-                title = stringResource(R.string.horizontal_wallpaper_scrolling),
-                description = stringResource(R.string.horizontal_wallpaper_scrolling_description),
-                checked = scheduleSettings.homeScrollingEnabled,
-                onCheckedChange = { enabled ->
-                    updateSettingsImmediate(
-                        scheduleSettings.copy(homeScrollingEnabled = enabled)
-                    )
-                }
-            )
-        }
 
         if (wallpaperMode == WallpaperMode.STATIC) {
             CurrentWallpaperPreview(
@@ -348,12 +343,26 @@ fun WallpaperScreen(
                         }
                     }
                 }
+                // Launchers scroll only the home screen, and only Fill keeps the image's overflow.
+                if (showsHorizontalScrolling(wallpaperMode, scheduleSettings)) {
+                    SettingSwitchItem(
+                        title = stringResource(R.string.horizontal_wallpaper_scrolling),
+                        description = stringResource(R.string.horizontal_wallpaper_scrolling_description),
+                        checked = scheduleSettings.homeScrollingEnabled,
+                        onCheckedChange = { enabled ->
+                            updateSettingsImmediate(
+                                scheduleSettings.copy(homeScrollingEnabled = enabled)
+                            )
+                        }
+                    )
+                }
             }
         }
 
         if (hasAlbumSelected) {
             Button(
                 onClick = onChangeWallpaperNow,
+                enabled = !changeInProgress,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
@@ -363,12 +372,12 @@ fun WallpaperScreen(
                         )
                     )
             ) {
-                Text(text = stringResource(R.string.change_wallpaper_now))
+                Text(text = stringResource(if (changeInProgress) R.string.changing_wallpaper else R.string.change_wallpaper_now))
             }
         }
         SettingSwitchItem(
             title = stringResource(R.string.shuffle),
-            description = if (scheduleSettings.shuffleEnabled && !scheduleSettings.separateSchedules) null else stringResource(R.string.randomly_shuffle_the_wallpapers),
+            description = stringResource(R.string.randomly_shuffle_the_wallpapers),
             checked = scheduleSettings.shuffleEnabled,
             onCheckedChange = { enabled ->
                 updateSettingsImmediate(scheduleSettings.copy(shuffleEnabled = enabled))
@@ -487,7 +496,7 @@ fun WallpaperScreen(
                 )
                 SettingSwitchItem(
                     title = stringResource(R.string.adaptive_brightness),
-                    description = if (scheduleSettings.adaptiveBrightness && !scheduleSettings.separateSchedules) null else stringResource(R.string.adjust_brightness_based_on_mode),
+                    description = stringResource(R.string.adjust_brightness_based_on_mode),
                     checked = scheduleSettings.adaptiveBrightness,
                     onCheckedChange = { enabled ->
                         updateSettingsImmediate(scheduleSettings.copy(adaptiveBrightness = enabled))
@@ -520,7 +529,7 @@ fun WallpaperScreen(
                     )
                     SettingSwitchItem(
                         title = stringResource(R.string.double_tap_to_change),
-                        description = if (scheduleSettings.liveEffects.enableDoubleTap) null else stringResource(R.string.double_tap_wallpaper_to_change_it),
+                        description = stringResource(R.string.double_tap_wallpaper_to_change_it),
                         checked = scheduleSettings.liveEffects.enableDoubleTap,
                         onCheckedChange = { enabled ->
                             updateSettingsImmediate(
@@ -532,7 +541,7 @@ fun WallpaperScreen(
                     )
                     SettingSwitchItem(
                         title = stringResource(R.string.change_on_screen_off),
-                        description = if (scheduleSettings.liveEffects.enableChangeOnScreenOff) null else stringResource(R.string.change_wallpaper_when_screen_turns_off),
+                        description = stringResource(R.string.change_wallpaper_when_screen_turns_off),
                         checked = scheduleSettings.liveEffects.enableChangeOnScreenOff,
                         onCheckedChange = { enabled ->
                             updateSettingsImmediate(
@@ -624,6 +633,13 @@ fun WallpaperScreen(
     }
 }
 
+/**
+ * Horizontal scrolling only does something for the home screen with Fill scaling (see
+ * usesLauncherManagedScrolling), so the switch is offered only then.
+ */
+internal fun showsHorizontalScrolling(mode: WallpaperMode, settings: ScheduleSettings): Boolean =
+    mode == WallpaperMode.STATIC && settings.homeEnabled && settings.homeScalingType == ScalingType.FILL
+
 @Composable
 private fun ScreenToggleCard(
     title: String,
@@ -632,8 +648,12 @@ private fun ScreenToggleCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Announced as a switch ("Lock, on"), so the visible Enabled/Disabled line isn't read twice.
     Card(
-        modifier = modifier,
+        modifier = modifier.semantics {
+            role = Role.Switch
+            toggleableState = ToggleableState(enabled)
+        },
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
@@ -648,7 +668,8 @@ private fun ScreenToggleCard(
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(stringResource(if (enabled) R.string.enabled else R.string.disabled),
                 style = MaterialTheme.typography.bodySmall, color = contentColor,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clearAndSetSemantics {})
         }
     }
 }

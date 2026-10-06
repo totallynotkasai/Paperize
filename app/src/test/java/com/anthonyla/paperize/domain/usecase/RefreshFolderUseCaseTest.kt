@@ -1,7 +1,7 @@
 package com.anthonyla.paperize.domain.usecase
 
+import com.anthonyla.paperize.testing.emptyFolder
 import com.anthonyla.paperize.core.Result
-import com.anthonyla.paperize.domain.model.Folder
 import com.anthonyla.paperize.domain.model.Wallpaper
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.source.DocumentSource
@@ -22,7 +22,7 @@ class RefreshFolderUseCaseTest {
     private val refresh = RefreshFolderUseCase(albums, documents, addToRotation)
 
     @Before fun setUp() {
-        every { albums.getFolderById("folder") } returns flowOf(Folder.empty("folder", "album").copy(uri = "tree"))
+        every { albums.getFolderById("folder") } returns flowOf(emptyFolder("folder", "album").copy(uri = "tree"))
         coEvery { albums.removeFolderImagesNotIn("folder", any()) } returns Result.Success(0)
     }
 

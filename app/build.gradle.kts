@@ -29,6 +29,10 @@ android {
     }
 
     sourceSets.getByName("androidTest").assets.directories.add("$projectDir/schemas")
+    // Test fixtures used by both unit and device tests.
+    listOf("test", "androidTest").forEach { name ->
+        sourceSets.getByName(name).kotlin.directories.add("$projectDir/src/sharedTest/java")
+    }
 
     defaultConfig {
         applicationId = "com.anthonyla.paperize"

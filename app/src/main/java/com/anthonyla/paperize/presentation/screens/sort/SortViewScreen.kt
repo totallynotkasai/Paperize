@@ -247,7 +247,7 @@ fun SortViewScreen(
                                             .data(currentFolder.coverUri?.toUri())
                                             .size(Size(100, 100))
                                             .build(),
-                                        contentDescription = currentFolder.name,
+                                        contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .size(AppIconSizes.large)

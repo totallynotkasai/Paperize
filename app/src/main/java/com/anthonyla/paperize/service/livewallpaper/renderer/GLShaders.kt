@@ -1,5 +1,8 @@
 package com.anthonyla.paperize.service.livewallpaper.renderer
 
+import com.anthonyla.paperize.core.util.blurRadiusToSigma
+import kotlin.math.hypot
+
 object GLShaders {
 
     const val VERTEX_SHADER = """
@@ -7,15 +10,15 @@ object GLShaders {
         attribute vec4 a_position;
         attribute vec2 a_texCoord;
         varying vec2 v_texCoord;
-        varying vec2 v_imageCoord;
+        varying vec2 v_screenCoord;
 
         void main() {
             gl_Position = u_mvpMatrix * a_position;
             v_texCoord = a_texCoord;
-            // a_position spans the complete picture even when its texture is split
-            // into tiles. Keep a global image coordinate so image-wide effects do
-            // not restart at every tile boundary.
-            v_imageCoord = vec2(a_position.x * 0.5 + 0.5, 0.5 - a_position.y * 0.5);
+            // Where on the screen this is (-1..1 on both axes), whichever way the picture is drawn:
+            // straight from its texture tiles, or from the blurred full-screen copy. Screen-wide
+            // effects use it so they look the same either way.
+            v_screenCoord = gl_Position.xy / gl_Position.w;
         }
     """
 
@@ -59,6 +62,25 @@ object GLShaders {
         }
     """
 
+    /** The blur kernel's sigma, in steps of u_blurRadius (see [BLUR_FRAGMENT_SHADER]). */
+    private const val BLUR_KERNEL_SIGMA_STEPS = 1.815f
+
+    /**
+     * The u_blurRadius step for a blur [radius] in pixels, so the live wallpaper blurs exactly as
+     * strongly as the static one, which uses Android's own radius-to-sigma rule.
+     */
+    fun blurStepForRadius(radius: Float): Float = blurRadiusToSigma(radius) / BLUR_KERNEL_SIGMA_STEPS
+
+    /**
+     * u_vignetteExtent for a [width] × [height] surface: scales v_screenCoord so that its length is
+     * the distance from the centre as a fraction of the half-diagonal (1 in the corners), like the
+     * static wallpaper's vignette.
+     */
+    fun vignetteExtent(width: Int, height: Int): Pair<Float, Float> {
+        val diagonal = hypot(width.toFloat(), height.toFloat())
+        return if (diagonal > 0f) width / diagonal to height / diagonal else 0f to 0f
+    }
+
     /**
      * Fragment shader for color effects (darken, vignette, grayscale).
      * Applied after blur passes. Uses branchless math for optimal GPU performance.
@@ -69,32 +91,32 @@ object GLShaders {
         uniform float u_alpha;
         uniform float u_darkenFactor;
         uniform float u_vignetteFactor;
+        uniform vec2 u_vignetteExtent;
         uniform float u_grayscaleFactor;
         uniform float u_adaptiveBrightnessFactor;
         varying vec2 v_texCoord;
-        varying vec2 v_imageCoord;
- 
+        varying vec2 v_screenCoord;
+
         void main() {
             vec4 color = texture2D(u_texture, v_texCoord);
- 
+
             color.rgb *= (1.0 - u_darkenFactor);
- 
-            // 2. Apply vignette — matches CPU vignetteBitmap gradient stops:
-            //    [0% dark at center] → [10% dark at 70% of radius] → [80% dark at edge]
-            //    radius is normalized to 0.5 UV (image edge along shorter axis)
-            vec2 vignetteCenter = v_imageCoord - 0.5;
-            float dist = length(vignetteCenter);
-            float t = clamp(dist / 0.5, 0.0, 1.0);
-            float innerDark = smoothstep(0.0, 0.7, t) * 0.1;
-            float outerDark = smoothstep(0.7, 1.0, t) * 0.7;
-            float darkAmount = innerDark + outerDark;
-            color.rgb *= (1.0 - darkAmount * u_vignetteFactor);
- 
+
+            // 2. Vignette, drawn as the static wallpaper draws it (WallpaperUtil.drawVignette): a
+            //    circle centred on the screen whose radius shrinks from the half-diagonal as the
+            //    strength grows, darkening 0% at the centre, 10% at 70% of the radius and 80% from
+            //    the radius out. Off entirely at strength 0.
+            float dist = length(v_screenCoord * u_vignetteExtent);
+            float radius = max(1.0 - u_vignetteFactor / 1.5, 0.001);
+            float t = clamp(dist / radius, 0.0, 1.0);
+            float darkAmount = mix(t * (0.1 / 0.7), 0.1 + (t - 0.7) * (0.7 / 0.3), step(0.7, t));
+            color.rgb *= (1.0 - darkAmount * step(0.001, u_vignetteFactor));
+
             // 3. Apply grayscale (branchless - mix handles factor 0 correctly)
             // ITU-R BT.709 standard luminance calculation
             float gray = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
             color.rgb = mix(color.rgb, vec3(gray), u_grayscaleFactor);
- 
+
             color.rgb *= u_adaptiveBrightnessFactor;
 
             gl_FragColor = vec4(color.rgb, color.a * u_alpha);
