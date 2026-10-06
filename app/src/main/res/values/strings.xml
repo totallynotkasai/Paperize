@@ -314,13 +314,13 @@
   <string name="widget_content_desc_not_set_up">%1$s, not set up</string>
   <string name="widget_home_not_set_up">Turn on Home and pick its album in Paperize first.</string>
   <string name="widget_lock_not_set_up">Turn on Lock and pick its album in Paperize first.</string>
-  <string name="widget_both_not_set_up">Turn on Home or Lock and pick an album in Paperize first.</string>
-  <string name="widget_live_no_album">Pick an album for the live wallpaper in Paperize first.</string>
+  <string name="widget_both_not_set_up">Set up Home or Lock in Paperize first.</string>
+  <string name="widget_live_no_album">Pick a live album in Paperize first.</string>
   <string name="widget_changing_lock">Changing the lock screen wallpaper…</string>
 
   <!-- Live auto-pan (fork plan 4.2) -->
   <string name="auto_pan">Auto-Pan Cut-Off Images</string>
-  <string name="auto_pan_description">Slowly moves across the parts of an image that Fill or None cuts off: up and down for tall images, side to side for wide ones. On wide images it takes the place of parallax.</string>
+  <string name="auto_pan_description">Slowly pans across the parts of an image that Fill or None cut off. On wide images it replaces parallax.</string>
   <string name="auto_pan_needs_fill_or_none">Works with Fill or None scaling.</string>
   <string name="auto_pan_speed">Speed</string>
   <plurals name="auto_pan_sweep_seconds">

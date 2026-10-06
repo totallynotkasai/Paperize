@@ -306,13 +306,13 @@
   <string name="widget_content_desc_not_set_up">%1$s，未设置</string>
   <string name="widget_home_not_set_up">请先在 Paperize 中开启主页并选择其相册。</string>
   <string name="widget_lock_not_set_up">请先在 Paperize 中开启锁屏并选择其相册。</string>
-  <string name="widget_both_not_set_up">请先在 Paperize 中开启主页或锁屏并选择相册。</string>
-  <string name="widget_live_no_album">请先在 Paperize 中为动态壁纸选择相册。</string>
+  <string name="widget_both_not_set_up">请先在 Paperize 中设置主页或锁屏。</string>
+  <string name="widget_live_no_album">请先在 Paperize 中选择动态相册。</string>
   <string name="widget_changing_lock">正在更换锁屏壁纸…</string>
 
   <!-- 动态自动平移（分支计划 4.2） -->
   <string name="auto_pan">自动平移被裁切的图片</string>
-  <string name="auto_pan_description">缓慢移动，显示被「填充」或「无」裁切掉的图片部分：竖长图片上下移动，宽幅图片左右移动。在宽幅图片上会取代视差效果。</string>
+  <string name="auto_pan_description">缓慢平移，显示被「填充」或「无」裁切掉的部分。在宽幅图片上会取代视差效果。</string>
   <string name="auto_pan_needs_fill_or_none">仅适用于「填充」或「无」缩放。</string>
   <string name="auto_pan_speed">速度</string>
   <plurals name="auto_pan_sweep_seconds">

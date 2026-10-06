@@ -9,10 +9,10 @@
     android:clipToOutline="true">
 
     <!-- Keeps glyph and badge together at one size in the middle of any cell, while the
-         background fills the cell. -->
+         background fills the cell. The badge sits clear of the padlock's shackle. -->
     <FrameLayout
-        android:layout_width="48dp"
-        android:layout_height="48dp"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
         android:layout_gravity="center"
         tools:ignore="UselessParent">
 

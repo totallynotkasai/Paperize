@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Shuffle widget at two cells or more: icon and name, plus "Not set up" while it can't change
-     anything. ShuffleWidgets sets the glyph, texts, state and tap. -->
+     anything. ShuffleWidgets sets the glyph, texts, state and tap; the whole widget is one
+     screen-reader item, labelled by its content description. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@android:id/background"
     android:layout_width="match_parent"
@@ -14,8 +15,8 @@
     android:paddingEnd="16dp">
 
     <FrameLayout
-        android:layout_width="40dp"
-        android:layout_height="40dp">
+        android:layout_width="44dp"
+        android:layout_height="44dp">
 
         <ImageView
             android:id="@+id/widget_glyph"
@@ -27,14 +28,14 @@
 
         <FrameLayout
             android:id="@+id/widget_badge"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
             android:layout_gravity="top|end"
             android:background="@drawable/widget_badge_background">
 
             <ImageView
-                android:layout_width="11dp"
-                android:layout_height="11dp"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
                 android:layout_gravity="center"
                 android:importantForAccessibility="no"
                 android:src="@drawable/ic_widget_shuffle" />
@@ -50,6 +51,7 @@
 
         <TextView
             android:id="@+id/widget_label"
+            android:importantForAccessibility="no"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
@@ -61,6 +63,7 @@
 
         <TextView
             android:id="@+id/widget_status"
+            android:importantForAccessibility="no"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"

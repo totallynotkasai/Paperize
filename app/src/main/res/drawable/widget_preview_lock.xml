@@ -14,7 +14,7 @@
         android:width="20dp"
         android:height="20dp"
         android:drawable="@drawable/widget_badge_preview"
-        android:end="8dp"
+        android:end="6dp"
         android:gravity="top|end"
-        android:top="8dp" />
+        android:top="6dp" />
 </layer-list>

@@ -136,13 +136,14 @@ class ShuffleWidgets @Inject constructor(
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 
+    /** Android 12+ cuts toasts off after two lines, so these stay short. */
     @StringRes
     private fun ShuffleProblem.message(): Int = when (this) {
         ShuffleProblem.HOME_NOT_SET_UP -> R.string.widget_home_not_set_up
         ShuffleProblem.LOCK_NOT_SET_UP -> R.string.widget_lock_not_set_up
         ShuffleProblem.NO_SCREEN_SET_UP -> R.string.widget_both_not_set_up
         ShuffleProblem.NO_LIVE_ALBUM -> R.string.widget_live_no_album
-        ShuffleProblem.LIVE_NOT_SET -> R.string.change_feedback_live_not_set
+        ShuffleProblem.LIVE_NOT_SET -> R.string.live_wallpaper_not_set_title
     }
 
     /** For the widget receivers, which Hilt can't inject through their shared base class. */
