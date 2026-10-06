@@ -15,6 +15,7 @@ import java.util.Calendar
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -39,7 +40,8 @@ class WallpaperScheduler @Inject constructor(
         screenType: ScreenType,
         intervalMinutes: Int,
         resetInterval: Boolean = false,
-        onlyIfNotScheduled: Boolean = false
+        onlyIfNotScheduled: Boolean = false,
+        firstRunAt: Long? = null
     ) {
 
         val adjustedInterval = intervalMinutes.toLong().coerceAtLeast(Constants.MIN_INTERVAL_MINUTES.toLong())
@@ -49,6 +51,9 @@ class WallpaperScheduler @Inject constructor(
             .putString(Constants.EXTRA_SCREEN_TYPE, screenType.name)
             .build()
 
+        val nextRun = firstRunAt ?: if (resetInterval) {
+            System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(adjustedInterval)
+        } else null
         val workRequest = PeriodicWorkRequestBuilder<WallpaperChangeWorker>(
             adjustedInterval,
             TimeUnit.MINUTES
@@ -58,11 +63,7 @@ class WallpaperScheduler @Inject constructor(
             .apply {
                 // New periodic work otherwise runs immediately. Unlike an initial delay, this
                 // one-run deadline also survives unrelated UPDATE requests from settings edits.
-                if (resetInterval) {
-                    setNextScheduleTimeOverride(
-                        System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(adjustedInterval)
-                    )
-                }
+                if (nextRun != null) setNextScheduleTimeOverride(nextRun)
             }
             .build()
 
@@ -92,7 +93,14 @@ class WallpaperScheduler @Inject constructor(
         }
     }
 
-    /** Reconcile all jobs from the same policy on startup, settings edits and album selection. */
+    /**
+     * Reconcile all jobs from the same policy on startup, settings edits and album selection.
+     *
+     * Existing jobs keep their countdown. A new job never runs straight away: one that takes over
+     * from a job covering the same screen (Home and Lock merging into one shared job, or splitting
+     * out of it) keeps that job's next run, and any other starts a full interval from now. Whoever
+     * turns a screen on applies its first wallpaper by hand, so it never changes twice.
+     */
     suspend fun updateSchedules(
         settings: ScheduleSettings,
         mode: WallpaperMode,
@@ -100,15 +108,28 @@ class WallpaperScheduler @Inject constructor(
     ) = mutex.withLock {
         val enabled = settings.enableChanger && settings.hasRequiredAlbums(mode)
         val targets = scheduledScreens(settings, mode)
+        // Read before cancelling anything, so a replacement can inherit its predecessor's timing.
+        val pending = ScreenType.entries.associateWith { pendingNextRun(it) }
+        val now = System.currentTimeMillis()
         for (screen in ScreenType.entries) {
             if (screen in targets) {
-                scheduleWallpaperChange(screen, settings.intervalMinutes(screen), onlyIfNotScheduled = onlyIfNotScheduled)
+                val interval = settings.intervalMinutes(screen)
+                val firstRunAt = if (pending[screen] != null) null else {
+                    firstRunForNewJob(screen, interval, pending.filterKeys { it !in targets }, now)
+                }
+                scheduleWallpaperChange(screen, interval, onlyIfNotScheduled = onlyIfNotScheduled, firstRunAt = firstRunAt)
             } else {
                 cancelWallpaperChange(screen)
             }
         }
         if (enabled) scheduleAlbumRefresh(onlyIfNotScheduled) else cancelAlbumRefresh()
     }
+
+    /** The next run of this screen's unfinished job, [Long.MAX_VALUE] if unknown, or null if none. */
+    private suspend fun pendingNextRun(screen: ScreenType): Long? =
+        workManager.getWorkInfosForUniqueWorkFlow(getWorkName(screen)).first()
+            .firstOrNull { !it.state.isFinished }
+            ?.nextScheduleTimeMillis
 
     fun cancelWallpaperChange(screenType: ScreenType) {
         val workName = getWorkName(screenType)
@@ -189,6 +210,31 @@ internal fun scheduledScreens(settings: ScheduleSettings, mode: WallpaperMode): 
         val interval = settings.intervalMinutes(screen)
         interval > 0 && !(screen == ScreenType.LIVE && interval < Constants.MIN_INTERVAL_MINUTES)
     }
+}
+
+/**
+ * When a new job first runs: at the earliest upcoming run of the jobs it replaces (those covering
+ * the same screen), capped at one interval from [now]; with nothing to take over, one interval
+ * from [now].
+ */
+internal fun firstRunForNewJob(
+    screen: ScreenType,
+    intervalMinutes: Int,
+    replaced: Map<ScreenType, Long?>,
+    now: Long
+): Long {
+    val fullInterval = now + TimeUnit.MINUTES.toMillis(
+        intervalMinutes.toLong().coerceAtLeast(Constants.MIN_INTERVAL_MINUTES.toLong())
+    )
+    val inherited = replaced.filter { (other, nextRun) -> nextRun != null && screen.overlaps(other) }
+        .values.filterNotNull().filter { it > now }.minOrNull()
+    return inherited?.coerceAtMost(fullInterval) ?: fullInterval
+}
+
+private fun ScreenType.overlaps(other: ScreenType): Boolean = when (this) {
+    ScreenType.LIVE -> other == ScreenType.LIVE
+    ScreenType.BOTH -> other == ScreenType.HOME || other == ScreenType.LOCK || other == ScreenType.BOTH
+    else -> other == this || other == ScreenType.BOTH
 }
 
 internal fun scheduledScreensToReset(

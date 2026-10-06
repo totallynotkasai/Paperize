@@ -15,9 +15,10 @@ interface WallpaperRepository {
 
     /**
      * Atomically get and remove next wallpaper from queue
-     * Prevents race conditions when multiple wallpaper changes happen simultaneously
+     * Prevents race conditions when multiple wallpaper changes happen simultaneously.
+     * [avoidId] is passed over and keeps its place in the queue.
      */
-    suspend fun getAndDequeueWallpaper(albumId: String, screenType: ScreenType): Wallpaper?
+    suspend fun getAndDequeueWallpaper(albumId: String, screenType: ScreenType, avoidId: String? = null): Wallpaper?
 
     suspend fun removeWallpaperFromQueue(
         albumId: String,
@@ -35,13 +36,23 @@ interface WallpaperRepository {
     )
 
     /**
-     * Fill an empty wallpaper queue; preserve a queue already filled by another caller
+     * Start a new round once nothing but [avoidId] is left to rotate; preserve a queue already
+     * filled by another caller. Each screen shuffles on its own. [startHalfway] starts a sequential
+     * round half-way through the album (a lock screen sharing the home screen's album).
      */
     suspend fun ensureWallpaperQueue(
         albumId: String,
         screenType: ScreenType,
-        shuffle: Boolean = false
+        shuffle: Boolean = false,
+        startHalfway: Boolean = false,
+        avoidId: String? = null
     ): Result<Unit>
+
+    /**
+     * Add newly imported images to every queue of the album that is part-way through its round,
+     * so the progress made so far survives. [wallpaperIds] not in the album are ignored.
+     */
+    suspend fun addToQueues(albumId: String, wallpaperIds: Collection<String>, shuffle: Boolean): Result<Unit>
 
     /**
      * Clear all queues for all albums

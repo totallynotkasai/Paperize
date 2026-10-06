@@ -49,7 +49,9 @@ import com.anthonyla.paperize.presentation.common.components.SettingSwitchItem
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.AlbumSelectionBottomSheet
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.CurrentLiveWallpaperPreview
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.CurrentWallpaperPreview
+import com.anthonyla.paperize.presentation.screens.wallpaper.components.LiveWallpaperBanner
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.SettingSwitchWithSlider
+import com.anthonyla.paperize.presentation.screens.wallpaper.components.disabledUnless
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.TimeIntervalPicker
 import com.anthonyla.paperize.presentation.theme.AppSpacing
 
@@ -68,26 +70,28 @@ fun WallpaperScreen(
     onSelectLockAlbum: (AlbumSummary?) -> Unit,
     onSelectLiveAlbum: (AlbumSummary?) -> Unit,
     onUpdateScheduleSettings: (ScheduleSettings) -> Unit,
-    onUpdateScheduleSettingsDebounced: (ScheduleSettings) -> Unit,
+    onUpdateSettingsDeferRender: (ScheduleSettings) -> Unit,
     onChangeWallpaperNow: () -> Unit,
     homeWallpaperUri: String?,
     lockWallpaperUri: String?,
     modifier: Modifier = Modifier,
-    liveWallpaperUri: String? = null
+    liveWallpaperUri: String? = null,
+    liveWallpaperNotSet: Boolean = false
 ) {
     var albumSelectionContext by rememberSaveable { mutableStateOf<AlbumSelectionContext?>(null) }
     var showEmptyAlbumWarning by rememberSaveable { mutableStateOf(false) }
     var scheduleSettings by remember { mutableStateOf(persistedScheduleSettings) }
 
-    // Keep an immediate local draft so a slider value waiting for the ViewModel debounce
-    // is included in a switch or other setting changed before that debounce expires.
+    // Every edit is saved at once; this local copy only keeps the controls responsive until the
+    // saved value comes back.
     LaunchedEffect(persistedScheduleSettings) {
         scheduleSettings = persistedScheduleSettings
     }
 
-    fun updateSettingsDebounced(newSettings: ScheduleSettings) {
+    /** Slider levels: saved at once, while re-rendering the static wallpaper waits for more edits. */
+    fun updateSettingsDeferRender(newSettings: ScheduleSettings) {
         scheduleSettings = newSettings
-        onUpdateScheduleSettingsDebounced(newSettings)
+        onUpdateSettingsDeferRender(newSettings)
     }
 
     fun updateSettingsImmediate(newSettings: ScheduleSettings) {
@@ -97,6 +101,8 @@ fun WallpaperScreen(
 
     val homeEnabled = scheduleSettings.homeEnabled
     val lockEnabled = scheduleSettings.lockEnabled
+    // Static effects belong to a screen; with neither turned on there is nothing to apply them to.
+    val effectsEnabled = wallpaperMode == WallpaperMode.LIVE || homeEnabled || lockEnabled
 
     val primaryEffects = when {
         wallpaperMode == WallpaperMode.LIVE -> scheduleSettings.liveEffects
@@ -118,7 +124,7 @@ fun WallpaperScreen(
                 lockEffects = if (lockEnabled) lock(scheduleSettings.lockEffects) else scheduleSettings.lockEffects
             )
         }
-        if (debounced) updateSettingsDebounced(updated) else updateSettingsImmediate(updated)
+        if (debounced) updateSettingsDeferRender(updated) else updateSettingsImmediate(updated)
     }
 
     val scalingOptions = listOf(
@@ -163,6 +169,7 @@ fun WallpaperScreen(
                 onClick = { albumSelectionContext = AlbumSelectionContext.HOME }
             )
         } else {
+            if (liveWallpaperNotSet) LiveWallpaperBanner()
             AlbumSelector(
                 albumId = scheduleSettings.liveAlbumId, albums = albums,
                 label = stringResource(R.string.currently_selected_album),
@@ -198,7 +205,7 @@ fun WallpaperScreen(
                         title = stringResource(R.string.interval_text),
                         minutes = scheduleSettings.homeIntervalMinutes,
                         onMinutesChange = { minutes ->
-                            updateSettingsDebounced(
+                            updateSettingsImmediate(
                                 scheduleSettings.copy(
                                     homeIntervalMinutes = minutes,
                                     lockIntervalMinutes = minutes
@@ -282,6 +289,14 @@ fun WallpaperScreen(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
+        if (!effectsEnabled) {
+            Text(
+                text = stringResource(R.string.effects_need_a_screen),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = AppSpacing.large)
+            )
+        }
         Card(
             shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(
@@ -299,6 +314,7 @@ fun WallpaperScreen(
                     text = stringResource(R.string.scaling),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.disabledUnless(effectsEnabled),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -321,7 +337,8 @@ fun WallpaperScreen(
                                     }
                                 )
                             },
-                            selected = scalingType == selectedScaling
+                            selected = scalingType == selectedScaling,
+                            enabled = effectsEnabled
                         ) {
                             Text(
                                 text = label,
@@ -375,6 +392,7 @@ fun WallpaperScreen(
                     text = stringResource(R.string.visual_effects),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.disabledUnless(effectsEnabled),
                     modifier = Modifier.padding(bottom = AppSpacing.small),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -394,6 +412,7 @@ fun WallpaperScreen(
                         updateSettingsImmediate(scheduleSettings.copy(lockEffects = scheduleSettings.lockEffects.copy(enableDarken = enabled)))
                     },
                     bothEnabled = bothEnabled,
+                    enabled = effectsEnabled,
                     homePercentage = primaryEffects.darkenPercentage,
                     lockPercentage = scheduleSettings.lockEffects.darkenPercentage,
                     onPercentageChange = { home, lock ->
@@ -415,6 +434,7 @@ fun WallpaperScreen(
                         updateSettingsImmediate(scheduleSettings.copy(lockEffects = scheduleSettings.lockEffects.copy(enableBlur = enabled)))
                     },
                     bothEnabled = bothEnabled,
+                    enabled = effectsEnabled,
                     homePercentage = primaryEffects.blurPercentage,
                     lockPercentage = scheduleSettings.lockEffects.blurPercentage,
                     onPercentageChange = { home, lock ->
@@ -436,6 +456,7 @@ fun WallpaperScreen(
                         updateSettingsImmediate(scheduleSettings.copy(lockEffects = scheduleSettings.lockEffects.copy(enableVignette = enabled)))
                     },
                     bothEnabled = bothEnabled,
+                    enabled = effectsEnabled,
                     homePercentage = primaryEffects.vignettePercentage,
                     lockPercentage = scheduleSettings.lockEffects.vignettePercentage,
                     onPercentageChange = { home, lock ->
@@ -457,6 +478,7 @@ fun WallpaperScreen(
                         updateSettingsImmediate(scheduleSettings.copy(lockEffects = scheduleSettings.lockEffects.copy(enableGrayscale = enabled)))
                     },
                     bothEnabled = bothEnabled,
+                    enabled = effectsEnabled,
                     homePercentage = primaryEffects.grayscalePercentage,
                     lockPercentage = scheduleSettings.lockEffects.grayscalePercentage,
                     onPercentageChange = { home, lock ->
@@ -469,7 +491,8 @@ fun WallpaperScreen(
                     checked = scheduleSettings.adaptiveBrightness,
                     onCheckedChange = { enabled ->
                         updateSettingsImmediate(scheduleSettings.copy(adaptiveBrightness = enabled))
-                    }
+                    },
+                    enabled = effectsEnabled
                 )
             }
         }
@@ -534,7 +557,7 @@ fun WallpaperScreen(
                         homePercentage = scheduleSettings.liveEffects.parallaxIntensity,
                         lockPercentage = 0,
                         onPercentageChange = { homePercent, _ ->
-                            updateSettingsDebounced(
+                            updateSettingsDeferRender(
                                 scheduleSettings.copy(
                                     liveEffects = scheduleSettings.liveEffects.copy(parallaxIntensity = homePercent)
                                 )

@@ -10,6 +10,7 @@ import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.core.util.WallpaperRenderer
 import com.anthonyla.paperize.domain.model.PreparedWallpaper
+import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -35,11 +36,20 @@ class ChangeWallpaperUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(albumId: String, screenType: ScreenType): Result<PreparedWallpaper> = Result.runCatching {
         val settings = settingsRepository.getScheduleSettings()
+        val shared = sharesAlbumWithOtherScreen(settings, albumId, screenType)
+        // Never show the image the other screen is showing, unless it is the only one left.
+        val avoidId = if (shared) {
+            wallpaperRepository.getCurrentWallpaper(albumId, screenType.otherStaticScreen())?.id
+        } else null
+        val startHalfway = startsHalfway(settings, albumId, screenType)
         repeat(Constants.MAX_WALLPAPER_LOAD_RETRIES) {
             currentCoroutineContext().ensureActive()
-            val candidate = wallpaperRepository.getAndDequeueWallpaper(albumId, screenType) ?: run {
-                wallpaperRepository.ensureWallpaperQueue(albumId, screenType, settings.shuffleEnabled).getOrThrow()
-                wallpaperRepository.getAndDequeueWallpaper(albumId, screenType)
+            val candidate = wallpaperRepository.getAndDequeueWallpaper(albumId, screenType, avoidId) ?: run {
+                wallpaperRepository.ensureWallpaperQueue(
+                    albumId, screenType, settings.shuffleEnabled, startHalfway, avoidId
+                ).getOrThrow()
+                wallpaperRepository.getAndDequeueWallpaper(albumId, screenType, avoidId)
+                    ?: avoidId?.let { wallpaperRepository.getAndDequeueWallpaper(albumId, screenType) }
                     ?: throw if (wallpaperRepository.countWallpapers(albumId) == 0) {
                         EmptyAlbumException(context.getString(R.string.no_wallpapers_in_album))
                     } else {
@@ -73,8 +83,8 @@ class ChangeWallpaperUseCase @Inject constructor(
     /**
      * Record a successfully applied wallpaper and keep the target screen queue in sync.
      *
-     * [screenType] can differ from the prepared queue when one HOME item was atomically applied to
-     * both screens. The exact item is removed from LOCK rather than blindly dequeuing its head.
+     * [screenType] can differ from the prepared queue when one item was applied to both screens.
+     * The exact item is removed from that queue rather than blindly dequeuing its head.
      */
     suspend fun complete(
         prepared: PreparedWallpaper,
@@ -107,7 +117,8 @@ class ChangeWallpaperUseCase @Inject constructor(
         }
 
         try {
-            wallpaperRepository.ensureWallpaperQueue(albumId, screenType, shuffle).getOrThrow()
+            val startHalfway = startsHalfway(settingsRepository.getScheduleSettings(), albumId, screenType)
+            wallpaperRepository.ensureWallpaperQueue(albumId, screenType, shuffle, startHalfway).getOrThrow()
             // Build first when this is the first synchronized use of a screen queue, then remove
             // the exact applied item. This prevents the just-applied wallpaper from being
             // reintroduced at the head of a freshly built queue.
@@ -142,3 +153,15 @@ class ChangeWallpaperUseCase @Inject constructor(
         const val TAG = "ChangeWallpaperUseCase"
     }
 }
+
+/** Home and Lock both rotate [albumId], so each should avoid the image the other shows. */
+internal fun sharesAlbumWithOtherScreen(settings: ScheduleSettings, albumId: String, screen: ScreenType): Boolean =
+    (screen == ScreenType.HOME || screen == ScreenType.LOCK) &&
+        settings.screensShareAlbum() && settings.albumFor(screen) == albumId
+
+/** A lock screen sharing home's album starts its sequential rounds half-way through the album. */
+internal fun startsHalfway(settings: ScheduleSettings, albumId: String, screen: ScreenType): Boolean =
+    screen == ScreenType.LOCK && !settings.shuffleEnabled && sharesAlbumWithOtherScreen(settings, albumId, screen)
+
+private fun ScreenType.otherStaticScreen(): ScreenType =
+    if (this == ScreenType.HOME) ScreenType.LOCK else ScreenType.HOME

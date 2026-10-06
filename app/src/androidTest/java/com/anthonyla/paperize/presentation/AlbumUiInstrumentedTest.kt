@@ -57,7 +57,7 @@ class AlbumUiInstrumentedTest {
                     appSettings = AppSettings(), wallpaperMode = mode.value,
                     onToggleChanger = {}, onSelectHomeAlbum = {}, onSelectLockAlbum = {}, onSelectLiveAlbum = {},
                     onUpdateScheduleSettings = { latest = it },
-                    onUpdateScheduleSettingsDebounced = { latest = it },
+                    onUpdateSettingsDeferRender = { latest = it },
                     onChangeWallpaperNow = {}, homeWallpaperUri = null, lockWallpaperUri = null
                 )
             }
@@ -161,7 +161,7 @@ class AlbumUiInstrumentedTest {
         }
     }
 
-    @Test fun intervalEditsDebounceAndExternalValuesCancelPendingEdits() {
+    @Test fun intervalEditsCommitOnDoneAndAreNeverResetWhileTyping() {
         val minutes = mutableIntStateOf(60)
         val changes = mutableListOf<Int>()
         compose.setContent {
@@ -169,20 +169,51 @@ class AlbumUiInstrumentedTest {
                 TimeIntervalPicker("Interval", minutes.intValue, { changes.add(it) })
             }
         }
-        compose.mainClock.autoAdvance = false
-        compose.mainClock.advanceTimeBy(Constants.DEBOUNCE_DELAY_MS + 50)
+        val hours = compose.onNodeWithText(context.getString(R.string.hours_txt))
+        val mins = compose.onNodeWithText(context.getString(R.string.mins))
+        hours.performClick()
+        hours.performTextReplacement("0")
+        // Moving to the next box is still the same edit.
+        mins.performClick()
+        mins.performTextReplacement("1")
+        compose.mainClock.advanceTimeBy(5_000)
         compose.runOnIdle { assertTrue(changes.isEmpty()) }
-        compose.onNodeWithText(context.getString(R.string.hours_txt)).performTextReplacement("0")
-        compose.mainClock.advanceTimeBy(100)
-        compose.onNodeWithText(context.getString(R.string.mins)).performTextReplacement("1")
-        compose.mainClock.advanceTimeBy(Constants.DEBOUNCE_DELAY_MS + 50)
-        compose.runOnIdle { assertEquals(listOf(Constants.MIN_INTERVAL_MINUTES), changes) }
 
-        compose.onNodeWithText(context.getString(R.string.mins)).performTextReplacement("30")
+        // A value saved elsewhere arrives while typing: the boxes keep what was typed.
         compose.runOnIdle { minutes.intValue = 120 }
-        compose.mainClock.advanceTimeBy(Constants.DEBOUNCE_DELAY_MS + 50)
+        mins.assertTextContains("1")
+        hours.assertTextContains("0")
+
+        // Done commits once, clamped to the minimum, and the boxes then show the saved value.
+        mins.performImeAction()
+        compose.runOnIdle { assertEquals(listOf(Constants.MIN_INTERVAL_MINUTES), changes) }
+        compose.runOnIdle { minutes.intValue = Constants.MIN_INTERVAL_MINUTES }
+        mins.assertTextContains(Constants.MIN_INTERVAL_MINUTES.toString())
+        hours.assertTextContains("0")
         compose.runOnIdle { assertEquals(1, changes.size) }
-        compose.onNodeWithText(context.getString(R.string.hours_txt)).assertTextContains("2")
+    }
+
+    @Test fun effectControlsAreDisabledWhileNoScreenIsOn() {
+        val settings = ScheduleSettings(lockEffects = WallpaperEffects(enableBlur = true, blurPercentage = 30))
+        var updates = 0
+        compose.setContent {
+            PaperizeTheme(false, false) {
+                WallpaperScreen(
+                    albums = emptyList(), persistedScheduleSettings = settings,
+                    appSettings = AppSettings(), wallpaperMode = WallpaperMode.STATIC,
+                    onToggleChanger = {}, onSelectHomeAlbum = {}, onSelectLockAlbum = {}, onSelectLiveAlbum = {},
+                    onUpdateScheduleSettings = { updates++ },
+                    onUpdateSettingsDeferRender = { updates++ },
+                    onChangeWallpaperNow = {}, homeWallpaperUri = null, lockWallpaperUri = null
+                )
+            }
+        }
+        compose.onNodeWithText(context.getString(R.string.effects_need_a_screen)).assertExists()
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress))[0]
+            .performScrollTo()
+            .assertIsNotEnabled()
+        compose.onNodeWithText(context.getString(R.string.fit)).performScrollTo().assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(0, updates) }
     }
 
 }

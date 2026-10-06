@@ -58,9 +58,76 @@ class AlbumRepositoryInstrumentedTest {
         val second = first.copy(id = "second", uri = "content://second", folderId = "folder")
 
         assertEquals(Result.Success(1), albums.addWallpapersToAlbum("album", listOf(second)))
-        assertTrue(db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).isEmpty())
+        // The round in progress survives; the caller then adds the new image to it.
+        assertEquals(listOf("first"), db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).map { it.wallpaperId })
         assertEquals(2, db.wallpaperDao().getWallpaperCountByAlbum("album"))
         assertEquals("content://second", db.folderDao().getFolderById("folder")?.coverUri)
+    }
+
+    @Test fun newImagesJoinTheRoundsInProgressAtTheirPlace() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        albums.addWallpapersToAlbum("album", listOf(image("d1"), image("d2"))).getOrThrow()
+        albums.addFolderToAlbum("album", Folder.empty("f1", "album").copy(uri = "content://tree1", wallpapers = listOf(image("f1a"), image("f1b")))).getOrThrow()
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
+        assertEquals("d1", wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)?.id)
+
+        albums.addWallpapersToAlbum("album", listOf(image("d3"), image("f1c", folderId = "f1"))).getOrThrow()
+        // Unknown ids (e.g. duplicates the album skipped) are ignored.
+        wallpapers.addToQueues("album", listOf("d3", "f1c", "never-added"), shuffle = false).getOrThrow()
+
+        assertEquals(
+            listOf("d2", "d3", "f1a", "f1b", "f1c"),
+            db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).map { it.wallpaperId }
+        )
+        // A screen with no round yet gets everything when its first round is built.
+        assertTrue(db.wallpaperQueueDao().getQueueItems("album", ScreenType.LOCK).isEmpty())
+    }
+
+    @Test fun eachScreenBuildsItsOwnRoundAndLockStartsHalfwayWhenAsked() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        albums.addWallpapersToAlbum("album", (1..6).map { image("i$it") }).getOrThrow()
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
+        assertTrue(db.wallpaperQueueDao().getQueueItems("album", ScreenType.LOCK).isEmpty())
+        wallpapers.ensureWallpaperQueue("album", ScreenType.LOCK, false, startHalfway = true).getOrThrow()
+        assertEquals(listOf("i1", "i2", "i3", "i4", "i5", "i6"), db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).map { it.wallpaperId })
+        assertEquals(listOf("i4", "i5", "i6", "i1", "i2", "i3"), db.wallpaperQueueDao().getQueueItems("album", ScreenType.LOCK).map { it.wallpaperId })
+    }
+
+    @Test fun theOtherScreensImageIsPassedOverAndKeepsItsPlace() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        albums.addWallpapersToAlbum("album", listOf(image("a"), image("b"), image("c"))).getOrThrow()
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
+        assertEquals("b", wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME, avoidId = "a")?.id)
+        assertEquals(listOf("a", "c"), db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).map { it.wallpaperId })
+        assertEquals("c", wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME, avoidId = "a")?.id)
+
+        // Only the avoided image is left: a new round starts instead.
+        assertNull(wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME, avoidId = "a"))
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false, avoidId = "a").getOrThrow()
+        assertEquals(listOf("a", "b", "c"), db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).map { it.wallpaperId })
+    }
+
+    @Test fun folderRefreshRemovesOnlyFilesTheScanNoLongerFinds() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        albums.addWallpapersToAlbum("album", listOf(image("direct"))).getOrThrow()
+        albums.addFolderToAlbum("album", Folder.empty("f1", "album").copy(uri = "content://tree1",
+            wallpapers = listOf(image("gone"), image("kept"), image("also-gone")))).getOrThrow()
+
+        assertEquals(2, albums.removeFolderImagesNotIn("f1", setOf("content://kept", "content://new")).getOrThrow())
+        assertEquals(listOf("direct", "kept"), db.wallpaperDao().getOrderedWallpaperIdsByAlbum("album"))
+        assertEquals("content://kept", db.folderDao().getFolderById("f1")?.coverUri)
+        assertEquals(0, albums.removeFolderImagesNotIn("f1", setOf("content://kept")).getOrThrow())
+    }
+
+    @Test fun pruningLeavesFolderImagesToTheFolderScan() = runBlocking {
+        val tracked = AlbumRepositoryImpl(FakeDocumentSource(missing = setOf("content://direct", "content://in-folder")), db)
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        tracked.addWallpapersToAlbum("album", listOf(image("direct"), image("other"))).getOrThrow()
+        tracked.addFolderToAlbum("album", Folder.empty("folder", "album").copy(uri = "content://tree", wallpapers = listOf(image("in-folder")))).getOrThrow()
+
+        assertEquals(1, tracked.pruneMissingEntries("album").getOrThrow())
+        assertNull(db.wallpaperDao().getWallpaperById("direct"))
+        assertNotNull(db.wallpaperDao().getWallpaperById("in-folder"))
     }
 
     @Test fun removingCoverUsesOnlyWallpapersFromThatAlbum() = runBlocking {
@@ -138,31 +205,37 @@ class AlbumRepositoryInstrumentedTest {
         assertEquals(listOf("first", "second"), db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).map { it.wallpaperId })
     }
 
-    @Test fun concurrentQueueCreationKeepsBothScreensInSyncAndDoesNotRefillConsumedItems() = runBlocking {
+    @Test fun concurrentQueueCreationShufflesEachScreenOnceAndDoesNotRefillConsumedItems() = runBlocking {
         db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
         albums.addWallpapersToAlbum("album", (1..8).map {
             Wallpaper.empty("image-$it", "album").copy(uri = "content://image-$it")
         }).getOrThrow()
         val home = async(Dispatchers.IO) { wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, true).getOrThrow() }
         val lock = async(Dispatchers.IO) { wallpapers.ensureWallpaperQueue("album", ScreenType.LOCK, true).getOrThrow() }
-        home.await(); lock.await()
+        val homeAgain = async(Dispatchers.IO) { wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, true).getOrThrow() }
+        home.await(); lock.await(); homeAgain.await()
         val expected = db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).map { it.wallpaperId }
+        assertEquals(8, expected.size)
         assertEquals(8, expected.toSet().size)
-        assertEquals(expected, db.wallpaperQueueDao().getQueueItems("album", ScreenType.LOCK).map { it.wallpaperId })
+        // Each screen has its own shuffled round of the whole album.
+        assertEquals(expected.toSet(), db.wallpaperQueueDao().getQueueItems("album", ScreenType.LOCK).map { it.wallpaperId }.toSet())
         wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)
         wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, true).getOrThrow()
         assertEquals(expected.drop(1), db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).map { it.wallpaperId })
     }
 
     /** Records grant changes instead of touching the system's real grants. */
-    private class FakeDocumentSource(val grants: MutableSet<String> = mutableSetOf()) : DocumentSource {
+    private class FakeDocumentSource(
+        val grants: MutableSet<String> = mutableSetOf(),
+        val missing: Set<String> = emptySet()
+    ) : DocumentSource {
         val released = mutableListOf<String>()
         override suspend fun retainReadPermission(uri: String) { grants += uri }
         override suspend fun releaseReadPermission(uri: String) { released += uri; grants -= uri }
         override suspend fun persistedReadGrants(): Set<String> = grants.toSet()
         override suspend fun readImage(uri: String) = SourceImage(uri, uri.substringAfterLast('/'), 0L)
         override suspend fun readFolder(uri: String, onProgress: (Int) -> Unit) = SourceFolder("folder", emptyList())
-        override suspend fun isMissing(uri: String, isTree: Boolean) = false
+        override suspend fun isMissing(uri: String, isTree: Boolean) = uri in missing
     }
 
     private fun image(id: String, folderId: String? = null, album: String = "album") =

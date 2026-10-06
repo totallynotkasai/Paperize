@@ -32,8 +32,8 @@ class WallpaperRepositoryImpl @Inject constructor(
     override suspend fun getNextWallpaperInQueue(albumId: String, screenType: ScreenType): Wallpaper? =
         wallpaperQueueDao.getNextWallpaperInQueue(albumId, screenType)?.toDomainModel()
 
-    override suspend fun getAndDequeueWallpaper(albumId: String, screenType: ScreenType): Wallpaper? =
-        wallpaperQueueDao.getAndDequeueWallpaper(albumId, screenType)?.toDomainModel()
+    override suspend fun getAndDequeueWallpaper(albumId: String, screenType: ScreenType, avoidId: String?): Wallpaper? =
+        wallpaperQueueDao.getAndDequeueWallpaper(albumId, screenType, avoidId)?.toDomainModel()
 
     override suspend fun removeWallpaperFromQueue(
         albumId: String,
@@ -54,27 +54,41 @@ class WallpaperRepositoryImpl @Inject constructor(
     override suspend fun ensureWallpaperQueue(
         albumId: String,
         screenType: ScreenType,
-        shuffle: Boolean
+        shuffle: Boolean,
+        startHalfway: Boolean,
+        avoidId: String?
     ): Result<Unit> = Result.runCatching {
         database.withTransaction {
             // Recheck inside the transaction: another caller may already have filled it.
-            if (wallpaperQueueDao.getNextWallpaperInQueue(albumId, screenType) != null) return@withTransaction
-            val otherScreen = if (shuffle) when (screenType) {
-                ScreenType.HOME -> ScreenType.LOCK
-                ScreenType.LOCK -> ScreenType.HOME
-                else -> null
-            } else null
-            val otherQueue = otherScreen?.let { wallpaperQueueDao.getQueueItems(albumId, it) }.orEmpty()
+            if (wallpaperQueueDao.getNextWallpaperInQueue(albumId, screenType, avoidId) != null) return@withTransaction
+            // Each screen gets its own order, so screens sharing an album don't move in step.
             val ids = if (shuffle) {
-                val available = wallpaperDao.getWallpaperIdsByAlbum(albumId)
-                if (otherQueue.isEmpty()) available.shuffled()
-                else QueueBuilder.mergeWithExistingQueue(otherQueue.map { it.wallpaperId }, available)
+                wallpaperDao.getWallpaperIdsByAlbum(albumId).shuffled()
             } else {
                 wallpaperDao.getOrderedWallpaperIdsByAlbum(albumId)
+                    .let { if (startHalfway) QueueBuilder.startingHalfway(it) else it }
             }
             wallpaperQueueDao.rebuildQueue(albumId, screenType, ids)
-            if (otherScreen != null && otherQueue.isEmpty()) {
-                wallpaperQueueDao.rebuildQueue(albumId, otherScreen, ids)
+        }
+    }
+
+    override suspend fun addToQueues(
+        albumId: String,
+        wallpaperIds: Collection<String>,
+        shuffle: Boolean
+    ): Result<Unit> = Result.runCatching {
+        if (wallpaperIds.isEmpty()) return@runCatching
+        database.withTransaction {
+            val rotation = wallpaperDao.getRotationOrder(albumId)
+            val added = wallpaperIds.toHashSet()
+            for (screen in ScreenType.entries) {
+                val queue = wallpaperQueueDao.getQueueItems(albumId, screen).map { it.wallpaperId }
+                // No queue yet: the next change builds a full one that already includes them.
+                if (queue.isEmpty()) continue
+                val queued = queue.toHashSet()
+                val newIds = rotation.filter { it in added && it !in queued }
+                if (newIds.isEmpty()) continue
+                wallpaperQueueDao.rebuildQueue(albumId, screen, QueueBuilder.mergeNew(queue, newIds, rotation, shuffle))
             }
         }
     }

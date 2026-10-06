@@ -224,7 +224,7 @@
   <string name="remove_selected_title">Remove selected items (%1$d)?</string>
   <string name="remove_selected_hint">These items will be removed from this album. Your original files will stay on your device.</string>
   <string name="refresh_folder">Refresh folder</string>
-  <string name="folder_refreshed">Folder checked for new wallpapers.</string>
+  <string name="folder_refreshed">Folder checked: new files were added and deleted ones removed.</string>
   <string name="folder_refresh_failed">Could not refresh this folder. Check that it is accessible, then try again.</string>
   <string name="sort_load_failed">Could not load the album. Go back and try again.</string>
   <string name="sort_save_failed">Could not save the order. Please try again.</string>
@@ -273,4 +273,10 @@
   </plurals>
   <string name="grant_warning_title">Nearing Android\'s file limit</string>
   <string name="grant_warning_message">Paperize is close to the limit on files and folders that Android lets an app keep access to (%1$d/%2$d). Beyond the limit, Android silently drops the oldest, and those images stop working. Where you can, add folders instead of individual images.</string>
+  <string name="live_wallpaper_not_set_title">Paperize isn\'t your live wallpaper</string>
+  <string name="live_wallpaper_not_set_message">Your album and settings are kept. Set Paperize as the live wallpaper to show them again.</string>
+  <string name="live_wallpaper_permission_hint">If the wallpaper picker closes straight away, allow Paperize to change the wallpaper in its app info (Permissions or Other permissions).</string>
+  <string name="set_live_wallpaper">Set live wallpaper</string>
+  <string name="app_info">App info</string>
+  <string name="effects_need_a_screen">Turn on Home or Lock above to change the effects.</string>
 </resources>

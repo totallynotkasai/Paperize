@@ -1,8 +1,5 @@
 package com.anthonyla.paperize.presentation.screens.home
 
-import android.app.WallpaperManager
-import android.content.ComponentName
-import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,7 +25,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.anthonyla.paperize.R
+import com.anthonyla.paperize.presentation.screens.wallpaper.components.openLiveWallpaperPicker
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.presentation.screens.home.components.HomeTopBar
 import com.anthonyla.paperize.presentation.screens.home.components.getTabItems
@@ -52,8 +52,14 @@ fun HomeScreen(
     val currentHomeWallpaperUri by viewModel.currentHomeWallpaperUri.collectAsStateWithLifecycle()
     val currentLockWallpaperUri by viewModel.currentLockWallpaperUri.collectAsStateWithLifecycle()
     val currentLiveWallpaperUri by viewModel.currentLiveWallpaperUri.collectAsStateWithLifecycle()
+    val liveWallpaperNotSet by viewModel.liveWallpaperNotSet.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // Returning from the system wallpaper picker (or anywhere else) re-checks the live wallpaper.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.checkLiveWallpaperStatus() }
+    // Effect edits are already saved; render the last ones before the app leaves the foreground.
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { viewModel.flushPendingRender() }
 
     val tabItems = getTabItems(
         wallpaperTitle = stringResource(R.string.wallpaper),
@@ -106,18 +112,21 @@ fun HomeScreen(
                                     persistedScheduleSettings = scheduleSettings,
                                     appSettings = appSettings,
                                     wallpaperMode = wallpaperMode!!,
-                                    onToggleChanger = { viewModel.toggleWallpaperChanger(it, onlyIfNotScheduled = true) },
+                                    onToggleChanger = { viewModel.toggleWallpaperChanger(it) },
                                     onSelectHomeAlbum = { album -> viewModel.selectHomeAlbum(album) },
                                     onSelectLockAlbum = { album -> viewModel.selectLockAlbum(album) },
                                     onSelectLiveAlbum = { album -> viewModel.selectLiveAlbum(album) },
                                     onUpdateScheduleSettings = { viewModel.updateScheduleSettings(it) },
-                                    onUpdateScheduleSettingsDebounced = { viewModel.updateScheduleSettingsDebounced(it) },
+                                    onUpdateSettingsDeferRender = {
+                                        viewModel.updateScheduleSettings(it, deferRender = true)
+                                    },
                                     onChangeWallpaperNow = {
                                         viewModel.changeWallpaperNowForActiveScreens()
                                     },
                                     homeWallpaperUri = currentHomeWallpaperUri,
                                     lockWallpaperUri = currentLockWallpaperUri,
-                                    liveWallpaperUri = currentLiveWallpaperUri
+                                    liveWallpaperUri = currentLiveWallpaperUri,
+                                    liveWallpaperNotSet = liveWallpaperNotSet
                                 )
                             }
                         }
@@ -156,26 +165,7 @@ fun HomeScreen(
                 Button(
                     onClick = {
                         viewModel.dismissLiveWallpaperPrompt()
-                        try {
-                            val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                                putExtra(
-                                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                                    ComponentName(
-                                        context.packageName,
-                                        "com.anthonyla.paperize.service.livewallpaper.PaperizeLiveWallpaperService"
-                                    )
-                                )
-                            }
-                            context.startActivity(intent)
-                        } catch (_: Exception) {
-                            try {
-                                val fallbackIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)
-                                context.startActivity(fallbackIntent)
-                            } catch (_: Exception) {
-                                val settingsIntent = Intent(android.provider.Settings.ACTION_SETTINGS)
-                                context.startActivity(settingsIntent)
-                            }
-                        }
+                        openLiveWallpaperPicker(context)
                     }
                 ) {
                     Text(stringResource(R.string.open_wallpaper_picker))

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,6 +30,12 @@ class MainActivity : ComponentActivity() {
             val settingsViewModel: SettingsViewModel = hiltViewModel()
 
             val currentSettings by settingsViewModel.appSettings.collectAsStateWithLifecycle()
+            // Decided once, from the first loaded settings. Finishing onboarding later flips
+            // firstLaunch, but the graph must keep its start destination or it is rebuilt.
+            var startsWithOnboarding by rememberSaveable { mutableStateOf<Boolean?>(null) }
+            LaunchedEffect(currentSettings) {
+                if (startsWithOnboarding == null) currentSettings?.let { startsWithOnboarding = it.firstLaunch }
+            }
 
             PaperizeTheme(
                 darkMode = currentSettings?.darkMode,
@@ -38,9 +45,10 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    if (currentSettings != null) {
+                    val onboarding = startsWithOnboarding
+                    if (onboarding != null) {
                         NavigationGraph(
-                            startDestination = if (currentSettings?.firstLaunch != false) StartupRoute else HomeRoute,
+                            startDestination = if (onboarding) StartupRoute else HomeRoute,
                             animate = currentSettings?.animate ?: true,
                             onFirstLaunchComplete = {
                                 settingsViewModel.updateFirstLaunch(false)

@@ -56,7 +56,9 @@ class WallpaperChangeService : Service() {
             ?.let(ScreenType::fromString)
             ?: ScreenType.BOTH
         when (intent?.action) {
-            ACTION_CHANGE_WALLPAPER -> handleChangeWallpaper(screenType, startId)
+            ACTION_CHANGE_WALLPAPER -> handleChangeWallpaper(
+                screenType, startId, resetSchedule = !intent.getBooleanExtra(EXTRA_KEEP_SCHEDULE, false)
+            )
             ACTION_CHANGE_WALLPAPER_AUTO ->
                 handleChangeWallpaper(screenType, startId, respectWallpaperMode = true)
             ACTION_APPLY_SPECIFIC_WALLPAPER -> handleApplySpecificWallpaper(
@@ -73,10 +75,15 @@ class WallpaperChangeService : Service() {
         return START_NOT_STICKY
     }
 
+    /**
+     * [resetSchedule] restarts the countdown of the jobs covering [screenType]. A change that puts
+     * a newly turned-on screen's first image up skips it: its job was just set up with a countdown.
+     */
     private fun handleChangeWallpaper(
         screenType: ScreenType,
         startId: Int,
-        respectWallpaperMode: Boolean = false
+        respectWallpaperMode: Boolean = false,
+        resetSchedule: Boolean = true
     ) {
         serviceScope.launch {
             wallpaperChangeLock.mutex.withLock {
@@ -94,7 +101,7 @@ class WallpaperChangeService : Service() {
                     val settings = settingsRepository.getScheduleSettings()
                     val outcome = wallpaperController.change(effectiveScreenType, settings)
                     if (outcome.emptyAlbum) notifier.showEmptyAlbum()
-                    if (outcome.changed) {
+                    if (outcome.changed && resetSchedule) {
                         wallpaperScheduler.resetAfterManualChange(
                             effectiveScreenType,
                             settings,
@@ -205,5 +212,6 @@ class WallpaperChangeService : Service() {
         const val ACTION_REAPPLY_EFFECTS = Constants.ACTION_REAPPLY_EFFECTS
         const val EXTRA_SCREEN_TYPE = Constants.EXTRA_SCREEN_TYPE
         const val EXTRA_WALLPAPER_ID = Constants.EXTRA_WALLPAPER_ID
+        const val EXTRA_KEEP_SCHEDULE = "com.anthonyla.paperize.EXTRA_KEEP_SCHEDULE"
     }
 }

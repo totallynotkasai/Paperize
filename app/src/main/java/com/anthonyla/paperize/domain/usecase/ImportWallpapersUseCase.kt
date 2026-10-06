@@ -35,7 +35,8 @@ class GrantLimitException(val needed: Int, val available: Int) :
 
 class ImportWallpapersUseCase @Inject constructor(
     private val documents: DocumentSource,
-    private val albumRepository: AlbumRepository
+    private val albumRepository: AlbumRepository,
+    private val addToRotation: AddToRotationUseCase
 ) {
     suspend fun addImages(albumId: String, uris: List<String>, onSaving: (Int, Int) -> Unit): ImportResult {
         // The picker's temporary grant is enough to read names and types before keeping access.
@@ -45,11 +46,12 @@ class ImportWallpapersUseCase @Inject constructor(
         val held = documents.persistedReadGrants()
         val newGrants = images.map { it.uri }.filterNot { it in held }
         checkGrantLimit(held.size, newGrants.size)
+        val wallpapers = images.map { it.toWallpaper(albumId) }
         val added = releasingOnFailure(newGrants) {
             images.forEach { documents.retainReadPermission(it.uri) }
-            albumRepository.addWallpapersToAlbum(albumId, images.map { it.toWallpaper(albumId) }, onSaving)
-                .getOrThrow()
+            albumRepository.addWallpapersToAlbum(albumId, wallpapers, onSaving).getOrThrow()
         }
+        if (added > 0) addToRotation(albumId, wallpapers.map { it.id })
         // Re-adding an image whose access was lost restores it.
         albumRepository.syncAccess(albumId)
         return ImportResult(
@@ -85,6 +87,7 @@ class ImportWallpapersUseCase @Inject constructor(
                 wallpapers = source.images.sortedBy { it.uri }.map { it.toWallpaper(albumId, folderId) }
             )
             val inserted = albumRepository.addFolderToAlbum(albumId, folder, onSaving).getOrThrow()
+            if (inserted) addToRotation(albumId, folder.wallpapers.map { it.id })
             ImportResult(
                 added = if (inserted) folder.wallpapers.size else 0,
                 skippedUnsupported = source.skippedUnsupported,

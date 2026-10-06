@@ -221,7 +221,7 @@
   <string name="remove_selected_title">移除所选项目（%1$d）？</string>
   <string name="remove_selected_hint">这些项目将从相册中移除。原始文件将保留在设备上。</string>
   <string name="refresh_folder">刷新文件夹</string>
-  <string name="folder_refreshed">已检查文件夹中的新壁纸。</string>
+  <string name="folder_refreshed">已检查文件夹：已添加新文件，并移除已删除的文件。</string>
   <string name="folder_refresh_failed">无法刷新此文件夹。请确认文件夹可访问后重试。</string>
   <string name="sort_load_failed">无法加载相册。请返回后重试。</string>
   <string name="sort_save_failed">无法保存顺序。请重试。</string>
@@ -265,4 +265,10 @@
   </plurals>
   <string name="grant_warning_title">接近 Android 的文件数量上限</string>
   <string name="grant_warning_message">Paperize 即将达到 Android 允许应用保留访问权限的文件和文件夹数量上限（%1$d/%2$d）。超出上限后，Android 会静默移除最早的权限，相应的图片将无法使用。请尽量添加文件夹，而不是单独的图片。</string>
+  <string name="live_wallpaper_not_set_title">Paperize 不是当前的动态壁纸</string>
+  <string name="live_wallpaper_not_set_message">你的相册和设置都已保留。将 Paperize 设为动态壁纸即可重新显示。</string>
+  <string name="live_wallpaper_permission_hint">如果壁纸选择器立即关闭，请在应用信息中（权限或其他权限）允许 Paperize 更改壁纸。</string>
+  <string name="set_live_wallpaper">设置动态壁纸</string>
+  <string name="app_info">应用信息</string>
+  <string name="effects_need_a_screen">请先在上方开启主屏幕或锁屏，再更改效果。</string>
 </resources>

@@ -4,9 +4,11 @@ import android.content.Context
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 
 /**
- * Schedules a folder rescan whenever Paperize enters the foreground.
+ * Asks for a folder rescan whenever Paperize enters the foreground. The worker skips it when the
+ * albums were refreshed within the last few hours.
  *
  * Unique work with [ExistingWorkPolicy.KEEP] coalesces rapid foreground transitions and avoids
  * running a second scan while an existing one is still active.
@@ -17,6 +19,7 @@ object AlbumRefreshScheduler {
 
     fun enqueue(context: Context) {
         val request = OneTimeWorkRequestBuilder<AlbumRefreshWorker>()
+            .setInputData(workDataOf(AlbumRefreshWorker.KEY_FROM_FOREGROUND to true))
             .addTag(WORK_TAG)
             .build()
 

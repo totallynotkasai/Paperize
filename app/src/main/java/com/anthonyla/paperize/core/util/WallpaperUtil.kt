@@ -2,6 +2,7 @@ package com.anthonyla.paperize.core.util
 import com.anthonyla.paperize.core.constants.Constants
 
 import android.app.WallpaperManager
+import android.os.Build
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -639,6 +640,7 @@ private fun processBitmapCpu(
     return result
 }
 
+/** Whether Paperize's live wallpaper is on the home screen or, on Android 14+, the lock screen. */
 fun isPaperizeLiveWallpaperActive(context: Context): Boolean {
     return try {
         // If we are checking from within the service itself (e.g. preview mode), we are active
@@ -648,20 +650,18 @@ fun isPaperizeLiveWallpaperActive(context: Context): Boolean {
         }
 
         val wallpaperManager = WallpaperManager.getInstance(context)
-        val wallpaperInfo = wallpaperManager.wallpaperInfo
-
-        if (wallpaperInfo == null) {
-            Log.d(TAG, "isPaperizeLiveWallpaperActive: wallpaperInfo is null (static wallpaper), returning false")
-            return false
-        }
-
         val expectedComponent = android.content.ComponentName(
             context.packageName,
             "com.anthonyla.paperize.service.livewallpaper.PaperizeLiveWallpaperService"
         )
-        val isPaperize = wallpaperInfo.component == expectedComponent
+        val home = wallpaperManager.wallpaperInfo?.component
+        // Android 14+ can run a different live wallpaper on the lock screen.
+        val lock = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            wallpaperManager.getWallpaperInfo(WallpaperManager.FLAG_LOCK)?.component
+        } else null
+        val isPaperize = home == expectedComponent || lock == expectedComponent
 
-        Log.d(TAG, "isPaperizeLiveWallpaperActive: current=${wallpaperInfo.component}, expected=$expectedComponent, match=$isPaperize")
+        Log.d(TAG, "isPaperizeLiveWallpaperActive: home=$home, lock=$lock, expected=$expectedComponent, match=$isPaperize")
         isPaperize
     } catch (e: Exception) {
         Log.e(TAG, "Error checking live wallpaper status", e)

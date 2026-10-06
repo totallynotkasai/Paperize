@@ -21,7 +21,8 @@ import org.junit.Test
 class ImportWallpapersUseCaseTest {
     private val documents = mockk<DocumentSource>()
     private val repository = mockk<AlbumRepository>()
-    private val useCase = ImportWallpapersUseCase(documents, repository)
+    private val addToRotation = mockk<AddToRotationUseCase>(relaxed = true)
+    private val useCase = ImportWallpapersUseCase(documents, repository, addToRotation)
 
     @Before fun setUp() {
         coEvery { documents.persistedReadGrants() } returns emptySet()
@@ -38,9 +39,21 @@ class ImportWallpapersUseCaseTest {
         assertFalse(result.alreadyInAlbum)
         assertEquals(1, result.grantsInUse)
         coVerify(exactly = 1) { documents.retainReadPermission("image") }
-        coVerify { repository.addWallpapersToAlbum("album", match {
-            it.single().let { image -> image.uri == "image" && image.dateModified == 42L && image.folderId == null }
-        }, any()) }
+        val saved = slot<List<Wallpaper>>()
+        coVerify { repository.addWallpapersToAlbum("album", capture(saved), any()) }
+        saved.captured.single().let { image ->
+            assertTrue(image.uri == "image" && image.dateModified == 42L && image.folderId == null)
+        }
+        // New images join the rotation rounds already in progress instead of restarting them.
+        coVerify(exactly = 1) { addToRotation("album", listOf(saved.captured.single().id)) }
+    }
+
+    @Test fun `images already in the album leave the rotation alone`() = runTest {
+        coEvery { documents.retainReadPermission("image") } just Runs
+        coEvery { documents.readImage("image") } returns SourceImage("image", "photo.jpg", 42L)
+        coEvery { repository.addWallpapersToAlbum(any(), any(), any()) } returns Result.Success(0)
+        assertTrue(useCase.addImages("album", listOf("image")) { _, _ -> }.alreadyInAlbum)
+        coVerify(exactly = 0) { addToRotation(any(), any()) }
     }
 
     @Test fun `permission failure does not save an inaccessible image`() = runTest {
@@ -125,12 +138,14 @@ class ImportWallpapersUseCaseTest {
         val result = useCase.addFolder("album", "tree", {}, { _, _ -> })
         assertEquals(1, result.added)
         assertEquals(2, result.skippedUnsupported)
-        coVerify { repository.addFolderToAlbum("album", match { folder ->
-            folder.name == "Photos" && folder.wallpapers.single().let {
-                it.folderId == folder.id && it.albumId == "album" && it.sourceType == WallpaperSourceType.FOLDER &&
-                    it.dateModified == 42L && it.fileName == "photo.png"
-            }
-        }, any()) }
+        val saved = slot<Folder>()
+        coVerify { repository.addFolderToAlbum("album", capture(saved), any()) }
+        val folder = saved.captured
+        assertTrue(folder.name == "Photos" && folder.wallpapers.single().let {
+            it.folderId == folder.id && it.albumId == "album" && it.sourceType == WallpaperSourceType.FOLDER &&
+                it.dateModified == 42L && it.fileName == "photo.png"
+        })
+        coVerify(exactly = 1) { addToRotation("album", folder.wallpapers.map { it.id }) }
     }
 
     @Test fun `existing folder restores access without rescanning`() = runTest {

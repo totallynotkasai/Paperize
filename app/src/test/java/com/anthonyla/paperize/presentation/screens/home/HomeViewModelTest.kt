@@ -4,12 +4,14 @@ import android.content.Context
 import androidx.lifecycle.ViewModelStore
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
+import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.domain.model.AlbumSummary
 import com.anthonyla.paperize.domain.model.AppSettings
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +33,7 @@ class HomeViewModelTest {
     private val albums = mockk<AlbumRepository>()
     private val wallpapers = mockk<WallpaperRepository>(relaxed = true)
     private val scheduler = mockk<WallpaperScheduler>(relaxed = true)
+    private val requests = mockk<WallpaperChangeRequests>(relaxed = true)
     private val stored = MutableStateFlow(ScheduleSettings(homeEnabled = true, homeAlbumId = "old"))
     private val store = ViewModelStore()
     private lateinit var viewModel: HomeViewModel
@@ -45,12 +48,13 @@ class HomeViewModelTest {
         coEvery { settings.getScheduleSettings() } answers { stored.value }
         coEvery { settings.updateEnableChanger(any()) } answers { stored.value = stored.value.copy(enableChanger = firstArg()) }
         coEvery { settings.updateHomeAlbumId(any()) } answers { stored.value = stored.value.copy(homeAlbumId = firstArg()) }
+        coEvery { settings.updateLockAlbumId(any()) } answers { stored.value = stored.value.copy(lockAlbumId = firstArg()) }
         coEvery { settings.updateScheduleSettings(any<(ScheduleSettings) -> ScheduleSettings>()) } answers {
             stored.value = firstArg<(ScheduleSettings) -> ScheduleSettings>()(stored.value)
             stored.value
         }
         every { wallpapers.getCurrentWallpaperFlow(any(), any()) } returns flowOf(null)
-        viewModel = HomeViewModel(mockk<Context>(), albums, mockk(), settings, scheduler, wallpapers)
+        viewModel = HomeViewModel(mockk<Context>(), albums, mockk(), settings, scheduler, wallpapers, requests)
         store.put("home", viewModel)
     }
 
@@ -63,7 +67,7 @@ class HomeViewModelTest {
     @Test fun `delayed effect edits preserve a newer pause and album selection`() = runTest {
         stored.value = stored.value.copy(enableChanger = true)
         val draft = stored.value.copy(homeEffects = stored.value.homeEffects.copy(blurPercentage = 60))
-        viewModel.updateScheduleSettingsDebounced(draft)
+        viewModel.updateScheduleSettings(draft, deferRender = true)
         viewModel.toggleWallpaperChanger(false)
         runCurrent()
         viewModel.selectHomeAlbum(AlbumSummary.empty("new"))
@@ -74,12 +78,87 @@ class HomeViewModelTest {
         assertEquals(60, stored.value.homeEffects.blurPercentage)
     }
 
-    @Test fun `disabling one screen clears only its current selection`() = runTest {
-        stored.value = stored.value.copy(lockEnabled = true, lockAlbumId = "lock")
+    @Test fun `turning a screen off keeps its album and stops only its rotation`() = runTest {
+        stored.value = stored.value.copy(enableChanger = true, lockEnabled = true, lockAlbumId = "lock")
         viewModel.updateScheduleSettings(stored.value.copy(homeEnabled = false))
         advanceUntilIdle()
-        assertNull(stored.value.homeAlbumId)
+        assertEquals("old", stored.value.homeAlbumId)
         assertEquals("lock", stored.value.lockAlbumId)
+        assertNull(stored.value.albumFor(ScreenType.HOME))
+        coVerify { scheduler.updateSchedules(match { it.activeScreens(WallpaperMode.STATIC) == setOf(ScreenType.LOCK) }, any(), any()) }
+        verify(exactly = 0) { requests.change(any(), any()) }
+    }
+
+    @Test fun `turning a screen back on shows its first image without restarting the new countdown`() = runTest {
+        stored.value = stored.value.copy(enableChanger = true, homeEnabled = false, lockEnabled = true, lockAlbumId = "lock")
+        viewModel.updateScheduleSettings(stored.value.copy(homeEnabled = true))
+        advanceUntilIdle()
+        verify(exactly = 1) { requests.change(ScreenType.HOME, keepSchedule = true) }
+        verify(exactly = 0) { requests.change(ScreenType.LOCK, any()) }
+    }
+
+    @Test fun `picking an album for a new screen changes only that screen and keeps its countdown`() = runTest {
+        stored.value = stored.value.copy(enableChanger = true, lockEnabled = true)
+        viewModel.selectLockAlbum(AlbumSummary.empty("old"))
+        advanceUntilIdle()
+        coVerifyOrder {
+            scheduler.updateSchedules(match { it.lockAlbumId == "old" }, WallpaperMode.STATIC, false)
+            requests.change(ScreenType.LOCK, keepSchedule = true)
+        }
+        verify(exactly = 0) { requests.change(ScreenType.HOME, any()) }
+        verify(exactly = 0) { requests.change(ScreenType.BOTH, any()) }
+    }
+
+    @Test fun `picking another album for a rotating screen restarts its countdown`() = runTest {
+        stored.value = stored.value.copy(enableChanger = true)
+        viewModel.selectHomeAlbum(AlbumSummary.empty("new"))
+        advanceUntilIdle()
+        verify(exactly = 1) { requests.change(ScreenType.HOME, keepSchedule = false) }
+    }
+
+    @Test fun `turning changing on applies the first images itself`() = runTest {
+        stored.value = stored.value.copy(lockEnabled = true, lockAlbumId = "lock")
+        viewModel.toggleWallpaperChanger(true)
+        advanceUntilIdle()
+        coVerify { scheduler.updateSchedules(match { it.enableChanger }, WallpaperMode.STATIC, false) }
+        verify(exactly = 1) { requests.change(ScreenType.BOTH, keepSchedule = true) }
+    }
+
+    @Test fun `effects re-render the current image while paused, only for the edited screen`() = runTest {
+        stored.value = stored.value.copy(lockEnabled = true, lockAlbumId = "lock")
+        viewModel.updateScheduleSettings(stored.value.copy(lockEffects = stored.value.lockEffects.copy(enableBlur = true)))
+        advanceUntilIdle()
+        verify(exactly = 1) { requests.reapplyEffects(ScreenType.LOCK) }
+        verify(exactly = 0) { requests.change(any(), any()) }
+    }
+
+    @Test fun `slider levels are saved at once and render once after the edits settle`() = runTest {
+        val first = stored.value.copy(homeEffects = stored.value.homeEffects.copy(enableDarken = true, darkenPercentage = 20))
+        viewModel.updateScheduleSettings(first, deferRender = true)
+        runCurrent()
+        assertEquals(20, stored.value.homeEffects.darkenPercentage)
+        viewModel.updateScheduleSettings(first.copy(homeEffects = first.homeEffects.copy(darkenPercentage = 40)), deferRender = true)
+        runCurrent()
+        assertEquals(40, stored.value.homeEffects.darkenPercentage)
+        verify(exactly = 0) { requests.reapplyEffects(any()) }
+        advanceTimeBy(Constants.SETTINGS_DEBOUNCE_MS + 1)
+        verify(exactly = 1) { requests.reapplyEffects(ScreenType.HOME) }
+    }
+
+    @Test fun `leaving the screen renders waiting effect edits straight away`() = runTest {
+        viewModel.updateScheduleSettings(stored.value.copy(homeEffects = stored.value.homeEffects.copy(enableBlur = true)), deferRender = true)
+        runCurrent()
+        viewModel.flushPendingRender()
+        verify(exactly = 1) { requests.reapplyEffects(ScreenType.HOME) }
+        advanceUntilIdle()
+        verify(exactly = 1) { requests.reapplyEffects(any()) }
+    }
+
+    @Test fun `no effect is rendered when no screen is turned on`() = runTest {
+        stored.value = stored.value.copy(homeEnabled = false)
+        viewModel.updateScheduleSettings(stored.value.copy(homeEffects = stored.value.homeEffects.copy(enableBlur = true)))
+        advanceUntilIdle()
+        verify(exactly = 0) { requests.reapplyEffects(any()) }
     }
 
     @Test fun `rapid edits keep scheduling side effects in persistence order`() = runTest {
@@ -92,7 +171,7 @@ class HomeViewModelTest {
         }
         viewModel.updateScheduleSettings(stored.value.copy(homeIntervalMinutes = 45))
         runCurrent()
-        viewModel.toggleWallpaperChanger(true, onlyIfNotScheduled = true)
+        viewModel.toggleWallpaperChanger(true)
         runCurrent()
         assertFalse(stored.value.enableChanger)
         firstSchedule.complete(Unit)

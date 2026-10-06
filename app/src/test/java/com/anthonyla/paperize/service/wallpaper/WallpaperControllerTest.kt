@@ -25,21 +25,38 @@ class WallpaperControllerTest {
     private val render = mockk<ReapplyEffectsUseCase>()
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val controller = WallpaperController(mockk<Context>(), manager, prepare, render, settingsRepository)
-    private val settings = ScheduleSettings(homeAlbumId = "album", lockAlbumId = "album")
+    private val settings = ScheduleSettings(homeEnabled = true, lockEnabled = true, homeAlbumId = "album", lockAlbumId = "album")
     private val bitmap = mockk<Bitmap>(relaxed = true)
     private val prepared = PreparedWallpaper(bitmap, "album", ScreenType.HOME, "image", false)
 
-    @Test fun `matching screens use one write and commit both only after acceptance`() = runTest {
+    @Test fun `a shared album changes each screen from its own queue, home first`() = runTest {
+        val lockBitmap = mockk<Bitmap>(relaxed = true)
+        val lock = PreparedWallpaper(lockBitmap, "album", ScreenType.LOCK, "other", false)
         coEvery { prepare("album", ScreenType.HOME) } returns Result.Success(prepared)
-        every { manager.setBitmap(bitmap, null, true, 3) } returns 1
+        coEvery { prepare("album", ScreenType.LOCK) } returns Result.Success(lock)
+        every { manager.setBitmap(bitmap, null, true, 1) } returns 1
+        every { manager.setBitmap(lockBitmap, null, true, 2) } returns 1
         assertEquals(WallpaperChangeOutcome(changed = true), controller.change(ScreenType.BOTH, settings))
         coVerifyOrder {
-            manager.setBitmap(bitmap, null, true, 3)
+            manager.setBitmap(bitmap, null, true, 1)
             prepare.complete(prepared, ScreenType.HOME)
-            prepare.complete(prepared, ScreenType.LOCK)
-            bitmap.recycle()
+            prepare("album", ScreenType.LOCK)
+            manager.setBitmap(lockBitmap, null, true, 2)
+            prepare.complete(lock, ScreenType.LOCK)
         }
+        verify { bitmap.recycle(); lockBitmap.recycle() }
         coVerify(exactly = 0) { prepare.restore(any()) }
+    }
+
+    @Test fun `a turned-off screen keeps its album but is never changed`() = runTest {
+        coEvery { prepare("album", ScreenType.HOME) } returns Result.Success(prepared)
+        every { manager.setBitmap(bitmap, null, true, 1) } returns 1
+        val lockOff = settings.copy(lockEnabled = false)
+        assertTrue(controller.change(ScreenType.BOTH, lockOff).changed)
+        assertEquals(WallpaperChangeOutcome(), controller.change(ScreenType.LOCK, lockOff))
+        coVerify(exactly = 0) { prepare(any(), ScreenType.LOCK) }
+        assertEquals(WallpaperChangeOutcome(), controller.reapply(ScreenType.LOCK, lockOff))
+        coVerify(exactly = 0) { render(any(), ScreenType.LOCK, any()) }
     }
 
     @Test fun `platform rejection restores prepared item and releases bitmap`() = runTest {
@@ -53,17 +70,19 @@ class WallpaperControllerTest {
 
     @Test fun `failed lock write preserves successful home commit`() = runTest {
         val lockBitmap = mockk<Bitmap>(relaxed = true)
+        val lock = PreparedWallpaper(lockBitmap, "album", ScreenType.LOCK, "other", false)
         coEvery { prepare("album", ScreenType.HOME) } returns Result.Success(prepared)
-        coEvery { render("album", ScreenType.LOCK, "image") } returns Result.Success(lockBitmap)
+        coEvery { prepare("album", ScreenType.LOCK) } returns Result.Success(lock)
         every { manager.setBitmap(bitmap, null, true, 1) } returns 1
         every { manager.setBitmap(lockBitmap, null, true, 2) } throws IOException("Rejected")
         try {
-            controller.change(ScreenType.BOTH, settings.copy(homeScrollingEnabled = true))
+            controller.change(ScreenType.BOTH, settings)
             fail("Expected rejection")
         } catch (_: IOException) { }
         coVerify(exactly = 1) { prepare.complete(prepared, ScreenType.HOME) }
-        coVerify(exactly = 0) { prepare.complete(prepared, ScreenType.LOCK) }
-        coVerify(exactly = 0) { prepare.restore(any()) }
+        coVerify(exactly = 0) { prepare.complete(lock, any()) }
+        coVerify(exactly = 1) { prepare.restore(lock) }
+        coVerify(exactly = 0) { prepare.restore(prepared) }
         verify { bitmap.recycle(); lockBitmap.recycle() }
     }
 
@@ -105,6 +124,18 @@ class WallpaperControllerTest {
         coVerify(exactly = 0) { prepare(any(), any()) }
         coVerify(exactly = 0) { prepare.complete(any(), any()) }
         verify { bitmap.recycle() }
+    }
+
+    @Test fun `effects never move a paused screen on to another image`() = runTest {
+        coEvery { render("album", ScreenType.HOME, null) } returns Result.Error(IllegalStateException("No current image"))
+        assertEquals(WallpaperChangeOutcome(), controller.reapply(ScreenType.HOME, settings.copy(enableChanger = false)))
+        coVerify(exactly = 0) { prepare(any(), any()) }
+
+        // While changing is on, a screen with nothing usable to re-render may still move on.
+        coEvery { prepare("album", ScreenType.HOME) } returns Result.Success(prepared)
+        every { manager.setBitmap(bitmap, null, true, 1) } returns 1
+        assertTrue(controller.reapply(ScreenType.HOME, settings.copy(enableChanger = true)).changed)
+        coVerify(exactly = 1) { prepare("album", ScreenType.HOME) }
     }
 
 }

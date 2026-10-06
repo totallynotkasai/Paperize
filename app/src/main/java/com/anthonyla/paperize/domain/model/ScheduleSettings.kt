@@ -29,21 +29,38 @@ data class ScheduleSettings(
     val effectiveLockIntervalMinutes: Int
         get() = if (homeEnabled && lockEnabled && separateSchedules) lockIntervalMinutes else homeIntervalMinutes
 
-    fun hasRequiredAlbums(mode: WallpaperMode): Boolean = when (mode) {
-        WallpaperMode.LIVE -> liveAlbumId != null
-        WallpaperMode.STATIC -> (homeEnabled || lockEnabled) &&
-            (!homeEnabled || homeAlbumId != null) && (!lockEnabled || lockAlbumId != null)
+    /**
+     * Whether anything can rotate: the live album, or at least one turned-on static screen with an
+     * album. A turned-on screen still waiting for its album doesn't stop the other one.
+     */
+    fun hasRequiredAlbums(mode: WallpaperMode): Boolean = activeScreens(mode).isNotEmpty()
+
+    /**
+     * The album a screen rotates, or null while that screen is turned off. Turning a screen off
+     * keeps its album, so every reader must go through this rather than the raw album IDs.
+     */
+    fun albumFor(screen: ScreenType): String? = when (screen) {
+        ScreenType.HOME -> homeAlbumId?.takeIf { homeEnabled }
+        ScreenType.LOCK -> lockAlbumId?.takeIf { lockEnabled }
+        ScreenType.LIVE -> liveAlbumId
+        ScreenType.BOTH -> null
     }
+
+    /** Static screens that are turned on and have an album, each listed on its own. */
+    fun rotatingStaticScreens(): Set<ScreenType> = buildSet {
+        if (albumFor(ScreenType.HOME) != null) add(ScreenType.HOME)
+        if (albumFor(ScreenType.LOCK) != null) add(ScreenType.LOCK)
+    }
+
+    /** Both static screens rotate the same album, so they must avoid showing the same image. */
+    fun screensShareAlbum(): Boolean =
+        albumFor(ScreenType.HOME) != null && albumFor(ScreenType.HOME) == albumFor(ScreenType.LOCK)
 
     fun activeScreens(mode: WallpaperMode): Set<ScreenType> {
         if (mode == WallpaperMode.LIVE) return if (liveAlbumId != null) setOf(ScreenType.LIVE) else emptySet()
-        val home = homeEnabled && homeAlbumId != null
-        val lock = lockEnabled && lockAlbumId != null
-        if (home && lock && homeAlbumId == lockAlbumId && !separateSchedules) return setOf(ScreenType.BOTH)
-        return buildSet {
-            if (home) add(ScreenType.HOME)
-            if (lock) add(ScreenType.LOCK)
-        }
+        val screens = rotatingStaticScreens()
+        if (screens.size == 2 && screensShareAlbum() && !separateSchedules) return setOf(ScreenType.BOTH)
+        return screens
     }
 
     fun intervalMinutes(screen: ScreenType): Int = when (screen) {
@@ -72,6 +89,21 @@ data class ScheduleSettings(
                lockIntervalMinutes != other.lockIntervalMinutes ||
                separateSchedules != other.separateSchedules ||
                liveIntervalMinutes != other.liveIntervalMinutes
+    }
+
+    /** Whether [screen]'s wallpaper is drawn differently, so its current image needs a re-render. */
+    fun hasDisplayChanges(other: ScheduleSettings, screen: ScreenType): Boolean = when (screen) {
+        ScreenType.HOME -> homeScalingType != other.homeScalingType ||
+            homeScrollingEnabled != other.homeScrollingEnabled ||
+            homeEffects != other.homeEffects ||
+            adaptiveBrightness != other.adaptiveBrightness
+        ScreenType.LOCK -> lockScalingType != other.lockScalingType ||
+            lockEffects != other.lockEffects ||
+            adaptiveBrightness != other.adaptiveBrightness
+        ScreenType.LIVE -> liveScalingType != other.liveScalingType ||
+            liveEffects != other.liveEffects ||
+            adaptiveBrightness != other.adaptiveBrightness
+        ScreenType.BOTH -> hasDisplayChanges(other, ScreenType.HOME) || hasDisplayChanges(other, ScreenType.LOCK)
     }
 
     /** Display changes reapply the current wallpaper without rescheduling periodic work. */

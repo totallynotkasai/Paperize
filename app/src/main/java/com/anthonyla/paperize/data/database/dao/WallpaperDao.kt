@@ -10,6 +10,8 @@ import com.anthonyla.paperize.data.database.entities.WallpaperEntity
 /** A directly added image and whether it was last seen without a covering grant. */
 data class DirectWallpaperAccess(val id: String, val uri: String, val accessLost: Boolean)
 
+data class WallpaperUri(val id: String, val uri: String)
+
 /**
  * Rotation order: images added directly first, then each folder in its saved order. Image order
  * only has to be consistent within its own group, so new files can join the end of their group.
@@ -72,6 +74,16 @@ interface WallpaperDao {
         WHERE w.albumId = :albumId AND $ELIGIBLE ORDER BY $ROTATION_ORDER
     """)
     suspend fun getOrderedWallpaperIdsByAlbum(albumId: String): List<String>
+
+    /** Every image in rotation order, including ones that can't rotate right now. */
+    @Query("""
+        SELECT w.id FROM wallpapers w LEFT JOIN folders f ON f.id = w.folderId
+        WHERE w.albumId = :albumId ORDER BY $ROTATION_ORDER
+    """)
+    suspend fun getRotationOrder(albumId: String): List<String>
+
+    @Query("SELECT id, uri FROM wallpapers WHERE folderId = :folderId")
+    suspend fun getFolderUris(folderId: String): List<WallpaperUri>
 
     /** Directly added images hold their own grant; folder images use their folder's grant. */
     @Query("SELECT uri FROM wallpapers WHERE albumId = :albumId AND folderId IS NULL")

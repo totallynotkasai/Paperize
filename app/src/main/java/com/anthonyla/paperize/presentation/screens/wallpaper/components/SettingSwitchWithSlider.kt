@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +33,9 @@ import kotlin.math.roundToInt
 
 /**
  * Effect control with either one switch/slider or independent HOME and LOCK controls.
+ *
+ * Sliders move freely while dragged and report through [onPercentageChange] once released (or
+ * once an accessibility action sets them), so each adjustment is saved exactly once.
  */
 @Composable
 fun SettingSwitchWithSlider(
@@ -47,7 +51,8 @@ fun SettingSwitchWithSlider(
     homeChecked: Boolean = checked,
     lockChecked: Boolean = checked,
     onHomeCheckedChange: (Boolean) -> Unit = onCheckedChange,
-    onLockCheckedChange: (Boolean) -> Unit = onCheckedChange
+    onLockCheckedChange: (Boolean) -> Unit = onCheckedChange,
+    enabled: Boolean = true
 ) {
     var homeValue by remember(homePercentage) {
         mutableFloatStateOf(homePercentage.toFloat())
@@ -55,6 +60,9 @@ fun SettingSwitchWithSlider(
     var lockValue by remember(lockPercentage) {
         mutableFloatStateOf(lockPercentage.toFloat())
     }
+    val commit = { onPercentageChange(homeValue.roundToInt(), lockValue.roundToInt()) }
+    val titleColor = MaterialTheme.colorScheme.onSurface.disabledUnless(enabled)
+    val descriptionColor = MaterialTheme.colorScheme.onSurfaceVariant.disabledUnless(enabled)
 
     Card(
         modifier = modifier
@@ -77,12 +85,12 @@ fun SettingSwitchWithSlider(
                         text = stringResource(title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = titleColor
                     )
                     Text(
                         text = stringResource(description),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = descriptionColor
                     )
                 }
 
@@ -91,20 +99,18 @@ fun SettingSwitchWithSlider(
                     checked = homeChecked,
                     onCheckedChange = onHomeCheckedChange,
                     value = homeValue,
-                    onValueChange = {
-                        homeValue = it
-                        onPercentageChange(it.roundToInt(), lockValue.roundToInt())
-                    }
+                    onValueChange = { homeValue = it },
+                    onValueChangeFinished = commit,
+                    enabled = enabled
                 )
                 ScreenEffectControl(
                     label = R.string.lock,
                     checked = lockChecked,
                     onCheckedChange = onLockCheckedChange,
                     value = lockValue,
-                    onValueChange = {
-                        lockValue = it
-                        onPercentageChange(homeValue.roundToInt(), it.roundToInt())
-                    }
+                    onValueChange = { lockValue = it },
+                    onValueChangeFinished = commit,
+                    enabled = enabled
                 )
             } else {
                 Row(
@@ -122,7 +128,7 @@ fun SettingSwitchWithSlider(
                             text = stringResource(title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = titleColor,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -130,7 +136,7 @@ fun SettingSwitchWithSlider(
                             Text(
                                 text = stringResource(description),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = descriptionColor,
                                 maxLines = 3,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -138,7 +144,8 @@ fun SettingSwitchWithSlider(
                     }
                     Switch(
                         checked = checked,
-                        onCheckedChange = onCheckedChange
+                        onCheckedChange = onCheckedChange,
+                        enabled = enabled
                     )
                 }
 
@@ -148,8 +155,10 @@ fun SettingSwitchWithSlider(
                         value = homeValue,
                         onValueChange = {
                             homeValue = it
-                            onPercentageChange(it.roundToInt(), it.roundToInt())
-                        }
+                            lockValue = it
+                        },
+                        onValueChangeFinished = commit,
+                        enabled = enabled
                     )
                 }
             }
@@ -163,7 +172,9 @@ private fun ScreenEffectControl(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     value: Float,
-    onValueChange: (Float) -> Unit
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    enabled: Boolean
 ) {
     Column(
         modifier = Modifier.padding(horizontal = AppSpacing.small),
@@ -177,18 +188,21 @@ private fun ScreenEffectControl(
             Text(
                 text = stringResource(label),
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface.disabledUnless(enabled)
             )
             Switch(
                 checked = checked,
-                onCheckedChange = onCheckedChange
+                onCheckedChange = onCheckedChange,
+                enabled = enabled
             )
         }
         if (checked) {
             PercentageSlider(
                 label = label,
                 value = value,
-                onValueChange = onValueChange
+                onValueChange = onValueChange,
+                onValueChangeFinished = onValueChangeFinished,
+                enabled = enabled
             )
         }
     }
@@ -198,7 +212,9 @@ private fun ScreenEffectControl(
 private fun PercentageSlider(
     @StringRes label: Int,
     value: Float,
-    onValueChange: (Float) -> Unit
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    enabled: Boolean
 ) {
     Column {
         Row(
@@ -208,7 +224,7 @@ private fun PercentageSlider(
             Text(
                 text = stringResource(label),
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = MaterialTheme.colorScheme.onSurface.disabledUnless(enabled),
                 modifier = Modifier.weight(1f),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -216,7 +232,7 @@ private fun PercentageSlider(
             Text(
                 text = "${value.roundToInt()}%",
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = MaterialTheme.colorScheme.primary.disabledUnless(enabled),
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(start = AppSpacing.medium)
             )
@@ -224,9 +240,14 @@ private fun PercentageSlider(
         Slider(
             value = value,
             onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
+            enabled = enabled,
             valueRange = Constants.MIN_EFFECT_PERCENTAGE.toFloat()..
                 Constants.MAX_EFFECT_PERCENTAGE.toFloat(),
             steps = Constants.SLIDER_EFFECT_STEPS
         )
     }
 }
+
+/** Material's 38% content alpha for disabled controls. */
+internal fun Color.disabledUnless(enabled: Boolean): Color = if (enabled) this else copy(alpha = 0.38f)

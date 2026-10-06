@@ -53,12 +53,15 @@ object Constants {
     const val MIN_INTERVAL_MINUTES = 15
     const val MAX_INTERVAL_MINUTES = 43200  // 30 days in minutes
     const val DEFAULT_INTERVAL_MINUTES = 60
+    /** Opening the app rescans folders at most this often; the daily 3 AM refresh always runs. */
+    const val FOREGROUND_REFRESH_MIN_INTERVAL_MS = 4 * 60 * 60 * 1000L
 
     // UI
     const val ANIMATION_DURATION_LONG_MS = 800  // For item reordering animations
     const val DEBOUNCE_DELAY_MS = 500L
     const val PERMISSION_SCREEN_TRANSITION_DELAY_MS = 300L  // Brief delay for permission screen transitions
-    const val SETTINGS_DEBOUNCE_MS = 2000L  // Debounce for settings changes before persisting
+    /** Settings are saved at once; re-rendering the static wallpaper waits this long for more edits. */
+    const val SETTINGS_DEBOUNCE_MS = 1500L
     const val WALLPAPER_CHANGE_DEBOUNCE_MS = 2000L
     const val WALLPAPER_ASPECT_RATIO = 9f / 16f  // Standard phone aspect ratio
     const val GRID_THUMBNAIL_WIDTH = 300

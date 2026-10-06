@@ -1,8 +1,11 @@
 package com.anthonyla.paperize.domain.model
 
 import com.anthonyla.paperize.core.ScalingType
+import com.anthonyla.paperize.core.ScreenType
+import com.anthonyla.paperize.core.WallpaperMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -29,6 +32,48 @@ class ScheduleSettingsTest {
             ),
             settings.validate()
         )
+    }
+
+    @Test
+    fun `a turned-off screen keeps its album but is not rotated`() {
+        val settings = ScheduleSettings(homeEnabled = true, lockEnabled = false, homeAlbumId = "a", lockAlbumId = "b")
+        assertEquals("a", settings.albumFor(ScreenType.HOME))
+        assertNull(settings.albumFor(ScreenType.LOCK))
+        assertEquals(setOf(ScreenType.HOME), settings.rotatingStaticScreens())
+        assertEquals(setOf(ScreenType.HOME), settings.activeScreens(WallpaperMode.STATIC))
+        assertEquals(setOf(ScreenType.HOME, ScreenType.LOCK), settings.copy(lockEnabled = true).activeScreens(WallpaperMode.STATIC))
+    }
+
+    @Test
+    fun `screens share an album only while both are on`() {
+        val shared = ScheduleSettings(homeEnabled = true, lockEnabled = true, homeAlbumId = "a", lockAlbumId = "a")
+        assertTrue(shared.screensShareAlbum())
+        assertEquals(setOf(ScreenType.BOTH), shared.activeScreens(WallpaperMode.STATIC))
+        assertEquals(setOf(ScreenType.HOME, ScreenType.LOCK), shared.copy(separateSchedules = true).activeScreens(WallpaperMode.STATIC))
+        assertFalse(shared.copy(lockEnabled = false).screensShareAlbum())
+        assertFalse(shared.copy(lockAlbumId = "b").screensShareAlbum())
+    }
+
+    @Test
+    fun `anything rotates once one turned-on screen has an album`() {
+        val waiting = ScheduleSettings(homeEnabled = true, lockEnabled = true, homeAlbumId = "a")
+        assertTrue(waiting.hasRequiredAlbums(WallpaperMode.STATIC))
+        assertFalse(waiting.copy(homeEnabled = false).hasRequiredAlbums(WallpaperMode.STATIC))
+        assertFalse(ScheduleSettings(homeAlbumId = "a").hasRequiredAlbums(WallpaperMode.STATIC))
+        assertTrue(ScheduleSettings(liveAlbumId = "live").hasRequiredAlbums(WallpaperMode.LIVE))
+    }
+
+    @Test
+    fun `display edits name the screens whose image must be re-rendered`() {
+        val current = ScheduleSettings()
+        val lockBlur = current.copy(lockEffects = WallpaperEffects(enableBlur = true))
+        assertTrue(lockBlur.hasDisplayChanges(current, ScreenType.LOCK))
+        assertFalse(lockBlur.hasDisplayChanges(current, ScreenType.HOME))
+        val scrolling = current.copy(homeScrollingEnabled = true)
+        assertTrue(scrolling.hasDisplayChanges(current, ScreenType.HOME))
+        assertFalse(scrolling.hasDisplayChanges(current, ScreenType.LOCK))
+        val brightness = current.copy(adaptiveBrightness = true)
+        assertTrue(brightness.hasDisplayChanges(current, ScreenType.HOME) && brightness.hasDisplayChanges(current, ScreenType.LOCK))
     }
 
     @Test

@@ -14,20 +14,25 @@ interface WallpaperQueueDao {
     /**
      * Unreadable or excluded images stay queued but are passed over, so restored access resumes their
      * place. Once only those remain, this returns null and the caller rebuilds the queue.
+     * [avoidId] (the image on the other screen) is passed over the same way and keeps its place.
      */
     @Query("""
         SELECT w.* FROM wallpapers w
         INNER JOIN wallpaper_queue wq ON w.id = wq.wallpaperId
         WHERE wq.albumId = :albumId AND wq.screenType = :screenType
         AND w.accessLost = 0 AND w.excluded = 0
+        AND (:avoidId IS NULL OR w.id != :avoidId)
         ORDER BY wq.queuePosition ASC
         LIMIT 1
     """)
-    suspend fun getNextWallpaperInQueue(albumId: String, screenType: ScreenType): WallpaperEntity?
+    suspend fun getNextWallpaperInQueue(albumId: String, screenType: ScreenType, avoidId: String?): WallpaperEntity?
+
+    suspend fun getNextWallpaperInQueue(albumId: String, screenType: ScreenType): WallpaperEntity? =
+        getNextWallpaperInQueue(albumId, screenType, null)
 
     @Transaction
-    suspend fun getAndDequeueWallpaper(albumId: String, screenType: ScreenType): WallpaperEntity? {
-        val wallpaper = getNextWallpaperInQueue(albumId, screenType)
+    suspend fun getAndDequeueWallpaper(albumId: String, screenType: ScreenType, avoidId: String?): WallpaperEntity? {
+        val wallpaper = getNextWallpaperInQueue(albumId, screenType, avoidId)
         if (wallpaper != null) {
             deleteQueueItem(albumId, screenType, wallpaper.id)
         }

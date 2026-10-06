@@ -115,7 +115,7 @@ class AlbumRepositoryImpl @Inject constructor(
         additions.mapNotNull { it.folderId }.toSet().forEach { folderId ->
             folderDao.updateFolderCover(folderId, wallpaperDao.getFolderCoverUri(folderId))
         }
-        database.wallpaperQueueDao().clearAllQueues(albumId)
+        // Rotation queues are kept: the caller adds the new images to the rounds in progress.
         albumDao.updateAlbumModifiedTime(albumId, System.currentTimeMillis())
         updateAlbumCoverIfNeeded(albumId)
         return additions.size
@@ -201,7 +201,9 @@ class AlbumRepositoryImpl @Inject constructor(
         while (true) {
             val batch = wallpaperDao.getWallpapersByAlbumPage(albumId, WALLPAPER_BATCH_SIZE, afterId)
             if (batch.isEmpty()) break
-            batch.filter { it.folderId !in missingFolders && documents.isMissing(it.uri) }
+            // Only directly added images need a query each; a folder's refresh compares its
+            // images with one scan of the folder instead.
+            batch.filter { it.folderId == null && documents.isMissing(it.uri) }
                 .mapTo(missingImages) { it.toDomainModel() }
             afterId = batch.last().id
         }
@@ -223,6 +225,21 @@ class AlbumRepositoryImpl @Inject constructor(
         )
         removed
     }
+
+    override suspend fun removeFolderImagesNotIn(folderId: String, foundUris: Set<String>): Result<Int> =
+        Result.runCatching {
+            database.withTransaction {
+                val albumId = folderDao.getFolderById(folderId)?.albumId ?: return@withTransaction 0
+                val gone = wallpaperDao.getFolderUris(folderId).filter { it.uri !in foundUris }.map { it.id }
+                if (gone.isEmpty()) return@withTransaction 0
+                // Folder images are covered by the folder's grant, so there is none to release.
+                val removed = gone.chunked(WALLPAPER_BATCH_SIZE).sumOf { wallpaperDao.deleteAlbumWallpapers(albumId, it) }
+                folderDao.refreshFolderCovers(albumId)
+                updateAlbumCoverIfNeeded(albumId)
+                albumDao.updateAlbumModifiedTime(albumId, System.currentTimeMillis())
+                removed
+            }
+        }
 
     override suspend fun syncAccess(albumId: String): Result<Int> = Result.runCatching {
         val grants = documents.persistedReadGrants()

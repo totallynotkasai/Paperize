@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.Operation
 import androidx.work.PeriodicWorkRequest
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
@@ -18,6 +19,7 @@ import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -47,15 +49,67 @@ class WallpaperSchedulerTest {
             cancelled += firstArg<String>()
             operation
         }
+        every { workManager.getWorkInfosForUniqueWorkFlow(any()) } returns flowOf(emptyList())
         scheduler = WallpaperScheduler(context)
+    }
+
+    private fun pending(name: String, nextRun: Long) {
+        val info = mockk<WorkInfo> {
+            every { state } returns WorkInfo.State.ENQUEUED
+            every { nextScheduleTimeMillis } returns nextRun
+        }
+        every { workManager.getWorkInfosForUniqueWorkFlow(name) } returns flowOf(listOf(info))
+    }
+
+    private fun request(name: String) = enqueued.last { it.first == name }.third
+
+    private val sharedAlbum = ScheduleSettings(
+        enableChanger = true, homeEnabled = true, lockEnabled = true, homeAlbumId = "album", lockAlbumId = "album"
+    )
+
+    @Test fun `a new job waits a full interval instead of running straight away`() = runTest {
+        val before = System.currentTimeMillis()
+        scheduler.updateSchedules(sharedAlbum.copy(lockEnabled = false), WallpaperMode.STATIC)
+        val nextRun = request(Constants.WORK_NAME_HOME).workSpec.calculateNextRunTime()
+        assertTrue(nextRun >= before + TimeUnit.MINUTES.toMillis(60))
+        assertTrue(nextRun <= System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(60))
+    }
+
+    @Test fun `an existing job keeps its countdown when settings are edited`() = runTest {
+        pending(Constants.WORK_NAME_HOME, System.currentTimeMillis() + 60_000)
+        scheduler.updateSchedules(sharedAlbum.copy(lockEnabled = false, homeIntervalMinutes = 90), WallpaperMode.STATIC)
+        val (_, policy, request) = enqueued.single { it.first == Constants.WORK_NAME_HOME }
+        assertEquals(ExistingPeriodicWorkPolicy.UPDATE, policy)
+        assertEquals(Long.MAX_VALUE, request.workSpec.nextScheduleTimeOverride)
+    }
+
+    @Test fun `enabling a second screen hands the first one's countdown to the shared job`() = runTest {
+        val homeNextRun = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(10)
+        pending(Constants.WORK_NAME_HOME, homeNextRun)
+        scheduler.updateSchedules(sharedAlbum, WallpaperMode.STATIC)
+        assertEquals(homeNextRun, request(Constants.WORK_NAME_BOTH).workSpec.nextScheduleTimeOverride)
+        assertTrue(Constants.WORK_NAME_HOME in cancelled)
+    }
+
+    @Test fun `turning one screen off leaves the other on the shared countdown`() = runTest {
+        val sharedNextRun = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(25)
+        pending(Constants.WORK_NAME_BOTH, sharedNextRun)
+        scheduler.updateSchedules(sharedAlbum.copy(lockEnabled = false), WallpaperMode.STATIC)
+        assertEquals(sharedNextRun, request(Constants.WORK_NAME_HOME).workSpec.nextScheduleTimeOverride)
+        assertTrue(Constants.WORK_NAME_BOTH in cancelled)
+    }
+
+    @Test fun `a screen still waiting for its album doesn't stop the other one`() = runTest {
+        scheduler.updateSchedules(sharedAlbum.copy(lockAlbumId = null), WallpaperMode.STATIC)
+        assertEquals(setOf(Constants.WORK_NAME_HOME, Constants.WORK_NAME_REFRESH), enqueued.map { it.first }.toSet())
     }
 
     @After
     fun tearDown() = unmockkAll()
 
-    @Test fun `missing required album cancels every schedule including refresh`() = runTest {
+    @Test fun `no album on any turned-on screen cancels every schedule including refresh`() = runTest {
         scheduler.updateSchedules(
-            ScheduleSettings(enableChanger = true, homeEnabled = true, lockEnabled = true, homeAlbumId = "home"),
+            ScheduleSettings(enableChanger = true, homeEnabled = false, lockEnabled = true, homeAlbumId = "home"),
             WallpaperMode.STATIC
         )
         assertTrue(enqueued.isEmpty())

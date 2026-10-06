@@ -43,8 +43,14 @@ interface AlbumRepository {
 
     suspend fun deleteAllAlbums(): Result<Unit>
 
-    /** Removes confirmed missing entries and updates covers in the same transaction. */
+    /**
+     * Removes missing folders and missing directly added images, and updates covers in the same
+     * transaction. Images inside folders are left to [removeFolderImagesNotIn].
+     */
     suspend fun pruneMissingEntries(albumId: String): Result<Int>
+
+    /** Remove the folder's images that a fresh scan of it no longer found. Returns how many. */
+    suspend fun removeFolderImagesNotIn(folderId: String, foundUris: Set<String>): Result<Int>
 
     /**
      * Mark images whose grant is gone (and clear the mark once it is back). Direct images need

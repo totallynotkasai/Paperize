@@ -1,7 +1,6 @@
 package com.anthonyla.paperize.presentation.screens.home
 
 import android.content.Context
-import android.content.Intent
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,7 +13,7 @@ import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.usecase.CreateAlbumUseCase
 import com.anthonyla.paperize.domain.repository.AlbumRepository
-import com.anthonyla.paperize.service.wallpaper.WallpaperChangeService
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,6 +24,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
@@ -43,7 +43,8 @@ class HomeViewModel @Inject constructor(
     private val createAlbumUseCase: CreateAlbumUseCase,
     private val settingsRepository: SettingsRepository,
     private val wallpaperScheduler: WallpaperScheduler,
-    private val wallpaperRepository: com.anthonyla.paperize.domain.repository.WallpaperRepository
+    private val wallpaperRepository: com.anthonyla.paperize.domain.repository.WallpaperRepository,
+    private val changeRequests: WallpaperChangeRequests
 ) : ViewModel() {
 
     companion object {
@@ -55,10 +56,6 @@ class HomeViewModel @Inject constructor(
     // Keep settings writes and their scheduling side effects ordered during rapid UI changes.
     private fun launchSettingsUpdate(action: suspend () -> Unit) = viewModelScope.launch {
         settingsMutex.withLock { action() }
-    }
-
-    init {
-        checkLiveWallpaperStatus()
     }
 
     val albums: StateFlow<List<AlbumSummary>> = albumRepository.getAlbumSummaries()
@@ -93,17 +90,18 @@ class HomeViewModel @Inject constructor(
      * URI of the wallpaper Paperize last applied for the home / lock screen, for the in-app preview.
      * Reading the source URI (rather than WallpaperManager.getDrawable) avoids the storage permission
      * the preview would otherwise need. Falls back to the BOTH-mode record when home/lock are synced.
+     * A turned-off screen keeps its album but shows no preview.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val currentHomeWallpaperUri: StateFlow<String?> = scheduleSettings
-        .map { it.homeAlbumId }
+        .map { it.albumFor(ScreenType.HOME) }
         .distinctUntilChanged()
         .flatMapLatest { albumId -> currentWallpaperUriFlow(albumId, ScreenType.HOME) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val currentLockWallpaperUri: StateFlow<String?> = scheduleSettings
-        .map { it.lockAlbumId }
+        .map { it.albumFor(ScreenType.LOCK) }
         .distinctUntilChanged()
         .flatMapLatest { albumId -> currentWallpaperUriFlow(albumId, ScreenType.LOCK) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), null)
@@ -136,25 +134,25 @@ class HomeViewModel @Inject constructor(
         _showLiveWallpaperPrompt.value = false
     }
 
-    private fun checkLiveWallpaperStatus() {
-        launchSettingsUpdate {
-            val mode = settingsRepository.getWallpaperMode()
-            val settings = settingsRepository.getScheduleSettings()
+    private val _liveWallpaperNotSet = MutableStateFlow(false)
 
-            if (mode == WallpaperMode.LIVE &&
-                settings.liveAlbumId != null &&
-                settings.enableChanger) {
+    /**
+     * Live mode has an album, but Paperize is the live wallpaper on neither screen (it was never
+     * set, or something else replaced it). The album and settings are kept; a banner offers to set
+     * it again.
+     */
+    val liveWallpaperNotSet: StateFlow<Boolean> = _liveWallpaperNotSet.asStateFlow()
 
-                val isActive = isPaperizeLiveWallpaperActive(context)
-                Log.d(TAG, "Startup check: LIVE mode with album selected, isPaperizeLiveWallpaperActive=$isActive")
-
-                if (!isActive) {
-                    Log.w(TAG, "Paperize live wallpaper was replaced/disabled - clearing live album selection")
-                    settingsRepository.updateLiveAlbumId(null)
-                    settingsRepository.updateEnableChanger(false)
-                    wallpaperScheduler.cancelAllWallpaperChanges()
-                }
+    /** Call whenever the screen resumes, e.g. on return from the system wallpaper picker. */
+    fun checkLiveWallpaperStatus() {
+        viewModelScope.launch {
+            val notSet = settingsRepository.getWallpaperMode() == WallpaperMode.LIVE &&
+                settingsRepository.getScheduleSettings().liveAlbumId != null &&
+                !isPaperizeLiveWallpaperActive(context)
+            if (notSet != _liveWallpaperNotSet.value) {
+                Log.d(TAG, "Paperize live wallpaper ${if (notSet) "is not set" else "is set"}")
             }
+            _liveWallpaperNotSet.value = notSet
         }
     }
 
@@ -172,6 +170,7 @@ class HomeViewModel @Inject constructor(
         updateSelection: suspend (String?) -> Unit
     ) {
         launchSettingsUpdate {
+            val before = settingsRepository.getScheduleSettings()
             updateSelection(album?.id)
             val mode = settingsRepository.getWallpaperMode()
             var updated = settingsRepository.getScheduleSettings()
@@ -180,23 +179,26 @@ class HomeViewModel @Inject constructor(
                 updated = updated.copy(enableChanger = false)
             }
             wallpaperScheduler.updateSchedules(updated, mode)
-            if (album != null && updated.enableChanger && updated.hasRequiredAlbums(mode) && mode == WallpaperMode.STATIC) {
-                val target = if (ScreenType.BOTH in updated.activeScreens(mode)) ScreenType.BOTH else screen
-                changeWallpaperNow(target)
+            if (mode == WallpaperMode.LIVE) {
+                checkLiveWallpaperStatus()
+            } else if (album != null && updated.enableChanger && updated.albumFor(screen) == album.id) {
+                // Only the screen whose album was picked changes. A screen that wasn't rotating yet
+                // keeps the countdown its new job just started; otherwise the change restarts it.
+                val newlyRotating = screen !in before.rotatingStaticScreens()
+                changeWallpaperNow(screen, keepSchedule = newlyRotating)
             }
         }
     }
 
-    fun toggleWallpaperChanger(enabled: Boolean, onlyIfNotScheduled: Boolean = false) {
+    fun toggleWallpaperChanger(enabled: Boolean) {
         launchSettingsUpdate {
             settingsRepository.updateEnableChanger(enabled)
             val updated = settingsRepository.getScheduleSettings()
             val mode = settingsRepository.getWallpaperMode()
-            wallpaperScheduler.updateSchedules(updated, mode, onlyIfNotScheduled)
+            // New jobs count a full interval from now, so the first change happens here instead.
+            wallpaperScheduler.updateSchedules(updated, mode)
             if (enabled && updated.hasRequiredAlbums(mode)) {
-                if (!onlyIfNotScheduled && mode == WallpaperMode.STATIC) {
-                    updated.activeScreens(mode).forEach(::changeWallpaperNow)
-                }
+                if (mode == WallpaperMode.STATIC) changeStaticScreensNow(updated.rotatingStaticScreens())
                 promptForLiveWallpaper(mode)
             }
         }
@@ -208,62 +210,95 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun updateScheduleSettings(settings: ScheduleSettings) {
-        pendingSettingsJob?.cancel()
-        pendingSettingsJob = null
-        applyScheduleSettings(settings)
-    }
-
-    private fun applyScheduleSettings(settings: ScheduleSettings) {
+    /**
+     * Save an edit at once. [deferRender] (slider levels) waits briefly before re-rendering the
+     * static wallpaper, so a run of edits renders once; [flushPendingRender] renders straight away.
+     */
+    fun updateScheduleSettings(settings: ScheduleSettings, deferRender: Boolean = false) {
         launchSettingsUpdate {
             lateinit var currentSettings: ScheduleSettings
             val validated = settingsRepository.updateScheduleSettings { current ->
                 currentSettings = current
-                // Album selection and pause/resume have their own actions. A delayed effect edit
-                // must not overwrite changes those actions made after this draft was captured.
+                // Album selection and pause/resume have their own actions. An edit made from an
+                // older draft must not overwrite changes those actions made since. Turning a
+                // screen off keeps its album, ready for when it is turned on again.
                 settings.copy(
                     enableChanger = current.enableChanger,
-                    homeAlbumId = if (settings.homeEnabled) current.homeAlbumId else null,
-                    lockAlbumId = if (settings.lockEnabled) current.lockAlbumId else null,
+                    homeAlbumId = current.homeAlbumId,
+                    lockAlbumId = current.lockAlbumId,
                     liveAlbumId = current.liveAlbumId
                 ).validate()
             }
-            val shuffleChanged = currentSettings.shuffleEnabled != validated.shuffleEnabled
-            val schedulingChanged = validated.hasSchedulingChanges(currentSettings)
-            val displayChanged = validated.hasDisplayChanges(currentSettings)
-
-            if (shuffleChanged) {
+            if (currentSettings.shuffleEnabled != validated.shuffleEnabled) {
                 wallpaperRepository.clearAllQueues()
             }
 
             val mode = settingsRepository.getWallpaperMode()
-            if (schedulingChanged) {
+            if (validated.hasSchedulingChanges(currentSettings)) {
                 wallpaperScheduler.updateSchedules(validated, mode)
             }
-            if (validated.enableChanger && validated.hasRequiredAlbums(mode) && displayChanged && mode == WallpaperMode.STATIC) {
-                validated.activeScreens(mode).forEach(::reapplyEffectsNow)
+            if (mode != WallpaperMode.STATIC) return@launchSettingsUpdate
+
+            // A screen turned on with changing on shows its first image now; its new job already
+            // counts down from now, so the change keeps that countdown.
+            val newlyRotating = if (validated.enableChanger) {
+                validated.rotatingStaticScreens() - currentSettings.rotatingStaticScreens()
+            } else emptySet()
+            changeStaticScreensNow(newlyRotating)
+
+            // Effects apply while paused too; the screens changed above already use them.
+            val toRender = validated.rotatingStaticScreens()
+                .filter { validated.hasDisplayChanges(currentSettings, it) } - newlyRotating
+            if (deferRender) {
+                deferRender(toRender)
+            } else {
+                pendingRenderScreens -= toRender.toSet()
+                reapplyEffectsNow(toRender)
             }
         }
     }
 
-    private var pendingSettingsJob: Job? = null
+    private val pendingRenderScreens = mutableSetOf<ScreenType>()
+    private var pendingRenderJob: Job? = null
 
-    fun updateScheduleSettingsDebounced(settings: ScheduleSettings) {
-        pendingSettingsJob?.cancel()
-        pendingSettingsJob = viewModelScope.launch {
+    private fun deferRender(screens: Collection<ScreenType>) {
+        if (screens.isEmpty()) return
+        pendingRenderScreens += screens
+        pendingRenderJob?.cancel()
+        pendingRenderJob = viewModelScope.launch {
             delay(Constants.SETTINGS_DEBOUNCE_MS)
-            pendingSettingsJob = null
-            applyScheduleSettings(settings)
+            pendingRenderJob = null
+            renderPending()
         }
     }
 
-    fun changeWallpaperNow(screenType: ScreenType) {
-        val intent = Intent(context, WallpaperChangeService::class.java).apply {
-            action = WallpaperChangeService.ACTION_CHANGE_WALLPAPER
-            putExtra(WallpaperChangeService.EXTRA_SCREEN_TYPE, screenType.name)
-        }
-        context.startForegroundService(intent)
+    /** Render waiting effect edits now; call when the user leaves the screen. */
+    fun flushPendingRender() {
+        pendingRenderJob?.cancel()
+        pendingRenderJob = null
+        renderPending()
     }
+
+    private fun renderPending() {
+        val screens = pendingRenderScreens.toSet()
+        pendingRenderScreens.clear()
+        reapplyEffectsNow(screens)
+    }
+
+    override fun onCleared() = flushPendingRender()
+
+    /** Change [screens] now; both static screens go in one request, which changes Home first. */
+    private fun changeStaticScreensNow(screens: Set<ScreenType>) {
+        when (screens.size) {
+            0 -> Unit
+            1 -> changeWallpaperNow(screens.single(), keepSchedule = true)
+            else -> changeWallpaperNow(ScreenType.BOTH, keepSchedule = true)
+        }
+    }
+
+    /** [keepSchedule] leaves the automatic countdown alone instead of restarting it. */
+    fun changeWallpaperNow(screenType: ScreenType, keepSchedule: Boolean = false) =
+        changeRequests.change(screenType, keepSchedule)
 
     /**
      * Change whichever wallpaper destinations are currently configured.
@@ -273,15 +308,14 @@ class HomeViewModel @Inject constructor(
      */
     fun changeWallpaperNowForActiveScreens() {
         val mode = wallpaperMode.value ?: return
-        scheduleSettings.value.activeScreens(mode).forEach(::changeWallpaperNow)
+        scheduleSettings.value.activeScreens(mode).forEach { changeWallpaperNow(it) }
     }
 
-    fun reapplyEffectsNow(screenType: ScreenType) {
-        val intent = Intent(context, WallpaperChangeService::class.java).apply {
-            action = WallpaperChangeService.ACTION_REAPPLY_EFFECTS
-            putExtra(WallpaperChangeService.EXTRA_SCREEN_TYPE, screenType.name)
+    private fun reapplyEffectsNow(screens: Collection<ScreenType>) {
+        when (screens.size) {
+            0 -> Unit
+            1 -> changeRequests.reapplyEffects(screens.single())
+            else -> changeRequests.reapplyEffects(ScreenType.BOTH)
         }
-        context.startForegroundService(intent)
     }
-
 }

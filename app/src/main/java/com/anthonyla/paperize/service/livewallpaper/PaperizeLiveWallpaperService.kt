@@ -33,6 +33,7 @@ import com.anthonyla.paperize.service.livewallpaper.renderer.LiveSelection
 import com.anthonyla.paperize.service.livewallpaper.renderer.LiveWallpaperImageLoader
 import com.anthonyla.paperize.service.livewallpaper.renderer.PaperizeRenderController
 import com.anthonyla.paperize.service.livewallpaper.renderer.PaperizeWallpaperRenderer
+import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -61,6 +62,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var wallpaperRepository: WallpaperRepository
+    @Inject lateinit var wallpaperScheduler: WallpaperScheduler
 
     companion object {
         private const val TAG = "PaperizeLiveWallpaper"
@@ -406,8 +408,11 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
         private fun handleDoubleTap() {
             if (isPreview) return
             engineScope.launch {
-                if (settingsRepository.getScheduleSettings().liveEffects.enableDoubleTap) {
-                    leader?.advance()
+                val settings = settingsRepository.getScheduleSettings()
+                val leader = leader
+                if (settings.liveEffects.enableDoubleTap && leader != null) {
+                    leader.advance()
+                    resetBackgroundCountdown(settings)
                 }
             }
         }
@@ -420,8 +425,28 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                     // Load while the screen is off, bypassing the visibility check.
                     val previous = nextSelection
                     nextSelection = LiveSelection.ADVANCE
-                    if (!renderController.forceReloadCurrentArtwork()) nextSelection = previous
+                    if (renderController.forceReloadCurrentArtwork()) {
+                        resetBackgroundCountdown(settings)
+                    } else {
+                        nextSelection = previous
+                    }
                 }
+            }
+        }
+
+        /**
+         * A change made on the wallpaper itself counts as a manual change, like the tile and
+         * shortcut: the background job waits a full interval from now instead of following soon.
+         */
+        private suspend fun resetBackgroundCountdown(settings: ScheduleSettings) {
+            try {
+                withContext(Dispatchers.IO) {
+                    wallpaperScheduler.resetAfterManualChange(ScreenType.LIVE, settings, settingsRepository.getWallpaperMode())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not restart the live wallpaper's background countdown", e)
             }
         }
 

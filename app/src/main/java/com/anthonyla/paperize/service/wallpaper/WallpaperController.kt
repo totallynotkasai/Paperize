@@ -30,20 +30,19 @@ class WallpaperController @Inject constructor(
     private val render: ReapplyEffectsUseCase,
     private val settingsRepository: SettingsRepository
 ) {
+    /**
+     * Move [screen] on to its next image. BOTH changes each turned-on static screen from its own
+     * queue, Home first, so screens sharing an album end up on different images. Screens that are
+     * turned off are left alone, even though they keep their album.
+     */
     suspend fun change(screen: ScreenType, settings: ScheduleSettings): WallpaperChangeOutcome = when (screen) {
         ScreenType.LIVE -> {
             context.sendBroadcast(Intent(Constants.ACTION_RELOAD_WALLPAPER).setPackage(context.packageName))
             WallpaperChangeOutcome(changed = true)
         }
-        ScreenType.HOME -> changeSelected(settings.homeAlbumId, screen)
-        ScreenType.LOCK -> changeSelected(settings.lockAlbumId, screen)
-        ScreenType.BOTH -> {
-            val home = settings.homeAlbumId
-            if (home != null && home == settings.lockAlbumId && !settings.separateSchedules) {
-                changeSynchronized(home, settings)
-            } else {
-                combine(changeSelected(home, ScreenType.HOME), changeSelected(settings.lockAlbumId, ScreenType.LOCK))
-            }
+        ScreenType.HOME, ScreenType.LOCK -> changeSelected(settings.albumFor(screen), screen)
+        ScreenType.BOTH -> settings.rotatingStaticScreens().fold(WallpaperChangeOutcome()) { outcome, target ->
+            combine(outcome, changeSelected(settings.albumFor(target), target))
         }
     }
 
@@ -54,21 +53,9 @@ class WallpaperController @Inject constructor(
         return WallpaperChangeOutcome(changed = true)
     }
 
-    private suspend fun changeSynchronized(albumId: String, settings: ScheduleSettings): WallpaperChangeOutcome {
-        val prepared = prepareOrDisable(albumId, ScreenType.BOTH) ?: return WallpaperChangeOutcome(emptyAlbum = true)
-        if (settings.sameStaticPresentation()) {
-            applyPrepared(prepared, ScreenType.BOTH)
-        } else {
-            applyPrepared(prepared, ScreenType.HOME)
-            val lockBitmap = render(albumId, ScreenType.LOCK, prepared.wallpaperId).getOrThrow()
-            applyBitmap(lockBitmap, ScreenType.LOCK) { prepare.complete(prepared, ScreenType.LOCK) }
-        }
-        return WallpaperChangeOutcome(changed = true)
-    }
-
     private suspend fun prepareOrDisable(albumId: String, screen: ScreenType): PreparedWallpaper? {
         try {
-            return prepare(albumId, if (screen == ScreenType.BOTH) ScreenType.HOME else screen).getOrThrow()
+            return prepare(albumId, screen).getOrThrow()
         } catch (_: EmptyAlbumException) {
             settingsRepository.clearEmptyAlbumSelection(albumId, screen)
             return null
@@ -108,16 +95,24 @@ class WallpaperController @Inject constructor(
         }
     }
 
+    /**
+     * Re-render the current image of each turned-on screen with the latest effects. Only while
+     * changing is on may a screen with no usable current image move on to its next one; while
+     * paused, effects never change which image is shown.
+     */
     suspend fun reapply(screen: ScreenType, settings: ScheduleSettings): WallpaperChangeOutcome {
         if (screen == ScreenType.LIVE) return WallpaperChangeOutcome()
         var outcome = WallpaperChangeOutcome()
         for (target in screen.staticScreens()) {
-            val albumId = if (target == ScreenType.HOME) settings.homeAlbumId else settings.lockAlbumId
-            if (albumId == null) continue
+            val albumId = settings.albumFor(target) ?: continue
             val bitmap = render(albumId, target).getOrNull()
-            val result = if (bitmap == null) changeSelected(albumId, target) else {
-                applyBitmap(bitmap, target)
-                WallpaperChangeOutcome(changed = true)
+            val result = when {
+                bitmap != null -> {
+                    applyBitmap(bitmap, target)
+                    WallpaperChangeOutcome(changed = true)
+                }
+                settings.enableChanger -> changeSelected(albumId, target)
+                else -> WallpaperChangeOutcome()
             }
             outcome = combine(outcome, result)
         }
