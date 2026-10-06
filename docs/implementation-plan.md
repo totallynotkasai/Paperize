@@ -102,7 +102,8 @@ check, a long vector path, and a plurals candidate. Device tests have not been r
 deleting an album frees its grants (`adb shell dumpsys activity` grant list).
 
 **Phase 1 notes and deviations:**
-- Work is on branch `phase-1/critical-fixes`. As asked, CI was run locally on Windows with the
+- Work is on branch `phase-1/critical-fixes`, kept local for review (not pushed, no pull request
+  yet). As asked, CI was run locally on Windows with the
   same commands as the workflow (`gradlew clean test`, then `gradlew :app:lintDebug`), plus a
   debug build. Results: 112/112 unit tests pass (86 before, 26 new), lint 0 errors and the same
   18 warnings as the baseline, debug build successful.
@@ -159,8 +160,40 @@ deleting an album frees its grants (`adb shell dumpsys activity` grant list).
   no album, every job stops, not just that screen's. That is existing behaviour; 2.1 changes it.
 - New text has English and Simplified Chinese versions. I wrote the Chinese; a native speaker
   may want to polish it.
-- Phone check: pending. The device tests need the phone unlocked, and the live-wallpaper steps
-  change the wallpaper, so they wait for you.
+- Device tests (installed with adb and run with `am instrument`, so Paperize Debug stayed
+  installed): 33 passed, 0 failed. That covers both migration tests, the new repository tests
+  (grouping order, permission release, access flags), document access, the live renderer and
+  display names. Not run: `WallpaperUtilInstrumentedTest` (sets the wallpaper), plus the
+  preferences and scheduler tests (they write to Paperize Debug's real settings and jobs).
+  **Known issue:** `AlbumUiInstrumentedTest.albumCoverLoadsThroughCoilAndFallsBackForMissingFiles`
+  hangs on this phone. It tests the Library's album card, which Phase 1 didn't change, and it
+  sticks inside Compose rather than failing its own 5-second waits. Not investigated yet. The
+  other 5 tests in that class pass.
+- Phone check (2026-10-06, Paperize Debug in live mode, album with one direct PNG and a folder
+  of 3 PNGs, an SVG and a TIFF), all passed:
+  - Folder import kept 4 images, skipped the TIFF and said "1 file was skipped…". SVG
+    thumbnails render.
+  - The album opens in Rotation order (direct image first, then the folder); the Reorder action
+    opens the reorder screen; dragging the SVG to the top of the folder and saving changed the
+    order. A new file found by Refresh went to the end of its folder, although its name sorts
+    first.
+  - The live preview showed the first image without consuming it: after setting the wallpaper,
+    the real engine started on that same image. "Change wallpaper now" moved to the SVG, drawn
+    sharply at full size, in the reordered sequence. The "Current wallpapers" card showed the
+    live image.
+  - After a reboot the live wallpaper showed the same SVG again instead of advancing.
+  - Kept permissions went from 0 → 2 (folder + image) → 0 after deleting the album, checked with
+    `dumpsys activity permissions`. Opening the album raised no false "can't be opened" banner.
+  - 4.1.1 was untouched (same version and install time).
+- Found during the phone check, for later items:
+  - HyperOS blocks a newly installed app from opening the live-wallpaper picker until its
+    "Change wallpaper" permission is allowed (Settings → Apps → Paperize Debug → permissions).
+    The picker just closes and logs "No permission to change wall paper". Worth a hint in the
+    app (fits 2.5).
+  - Reopening the app before the live wallpaper is set cleared the live album: audit #8,
+    fixed by 2.5.
+  - HyperOS's own image picker hides SVG and TIFF files, so on this phone SVGs can only be added
+    through a folder.
 
 ---
 
