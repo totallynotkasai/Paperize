@@ -19,6 +19,18 @@
 - Live wallpaper previews no longer use up images, and one change event advances the wallpaper once, however many wallpaper engines are running.
 - Scheduled changes now show the same "album empty" and "couldn't change" notifications as manual ones, and stop their background job once changing has been turned off.
 
+### Scheduling and settings
+- Turning the Home or Lock screen off keeps its album, ready for when it's turned on again. The change button, Quick Settings tile, shortcut and effects leave a turned-off screen alone, and a screen still waiting for its album no longer stops the other screen changing.
+- Turning a screen on, picking its album or turning changing on shows the first image straight away and starts that screen's countdown from then, so nothing changes twice. Turning one screen on or off, or switching separate schedules, keeps the other screen's countdown.
+- Home and Lock using the same album now show different images: each screen has its own shuffle order, neither shows the image the other is showing, and in order mode the lock screen starts half-way through the album.
+- Effects and scaling can be changed while changing is paused: the current image is re-rendered and never swapped for another. The effect controls are greyed out while neither screen is turned on.
+- Rotation progress survives new images: imports and folder refreshes add them to the current round instead of starting it again.
+- A folder's Refresh also removes files deleted from the folder. Background refreshes compare each folder with one scan of it instead of checking every image separately, and opening the app refreshes at most every 4 hours (the daily 3 AM refresh is unchanged).
+- Settings are no longer lost: slider changes are saved as soon as you let go (the wallpaper re-renders shortly after, or straight away when you leave the screen), and interval boxes keep what you type until you press Done or leave them.
+- In live mode, Paperize no longer clears your album when it isn't the live wallpaper on opening the app. A banner offers "Set live wallpaper" instead, and the check also looks at the lock screen on Android 14+. On Xiaomi phones it explains the "change wallpaper" permission HyperOS asks for.
+- Finishing onboarding no longer rebuilds the app's navigation.
+- Double-tapping the live wallpaper or changing it on screen-off restarts the background countdown, like the tile and shortcut.
+
 ## v4.2.0
 
 ### Library and albums

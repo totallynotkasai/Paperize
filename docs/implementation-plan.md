@@ -201,20 +201,98 @@ deleting an album frees its grants (`adb shell dumpsys activity` grant list).
 
 | ID | Item | Audit ref | Size | Status |
 |----|------|-----------|------|--------|
-| 2.1 | **Turning a screen off keeps its album.** Stop clearing album IDs; the change service, reapply, tile and widgets check the Home/Lock enabled flags instead. | #9 | M | ☐ |
-| 2.2 | **Enabling a second screen doesn't cancel the first one's schedule.** A new schedule created together with a manual change starts its countdown from now, so the wallpaper never changes twice. | #9 | S | ☐ |
-| 2.3 | **Effects apply while paused.** Re-render the current image; never advance to a new one as a fallback while paused. Effect controls are disabled when no screen is enabled. | #10 | S | ☐ |
-| 2.4 | **Different images on Home and Lock** (same album): independent shuffle orders, never apply the image currently on the other screen, and the lock screen starts offset in sequential mode. | #15 | M | ☐ |
-| 2.5 | **Live album isn't wiped on app open.** Replace the silent reset with a banner and "Set live wallpaper" button; check the lock screen too (Android 14+). | #8 | S | ☐ |
-| 2.6 | **Rotation progress survives new images** (merge instead of clearing queues). | #13 | S | ☐ |
-| 2.7 | **Folder Refresh also removes deleted files**, by comparing against the scan. | #11 | S | ☐ |
-| 2.8 | **Lighter background refresh.** Compare folder images with the scan instead of one query per image; foreground refresh at most every few hours (the 3 AM daily run stays). | #12 | M | ☐ |
-| 2.9 | **Settings are never lost.** Save slider values immediately and debounce only the re-render; flush on leaving the screen. Interval boxes commit on Done or focus loss and stop resetting while you type; all interval pickers behave the same. | #18 | M | ☐ |
-| 2.10 | **Onboarding** keeps a fixed start destination (no navigation rebuild when it finishes). | #20 | S | ☐ |
-| 2.11 | **Live double-tap and screen-off changes** reset the background countdown, like the tile and shortcut do. | — | S | ☐ |
+| 2.1 | **Turning a screen off keeps its album.** Stop clearing album IDs; the change service, reapply, tile and widgets check the Home/Lock enabled flags instead. | #9 | M | ☑ |
+| 2.2 | **Enabling a second screen doesn't cancel the first one's schedule.** A new schedule created together with a manual change starts its countdown from now, so the wallpaper never changes twice. | #9 | S | ☑ |
+| 2.3 | **Effects apply while paused.** Re-render the current image; never advance to a new one as a fallback while paused. Effect controls are disabled when no screen is enabled. | #10 | S | ☑ |
+| 2.4 | **Different images on Home and Lock** (same album): independent shuffle orders, never apply the image currently on the other screen, and the lock screen starts offset in sequential mode. | #15 | M | ☑ |
+| 2.5 | **Live album isn't wiped on app open.** Replace the silent reset with a banner and "Set live wallpaper" button; check the lock screen too (Android 14+). | #8 | S | ☑ |
+| 2.6 | **Rotation progress survives new images** (merge instead of clearing queues). | #13 | S | ☑ |
+| 2.7 | **Folder Refresh also removes deleted files**, by comparing against the scan. | #11 | S | ☑ |
+| 2.8 | **Lighter background refresh.** Compare folder images with the scan instead of one query per image; foreground refresh at most every few hours (the 3 AM daily run stays). | #12 | M | ☑ |
+| 2.9 | **Settings are never lost.** Save slider values immediately and debounce only the re-render; flush on leaving the screen. Interval boxes commit on Done or focus loss and stop resetting while you type; all interval pickers behave the same. | #18 | M | ☑ |
+| 2.10 | **Onboarding** keeps a fixed start destination (no navigation rebuild when it finishes). | #20 | S | ☑ |
+| 2.11 | **Live double-tap and screen-off changes** reset the background countdown, like the tile and shortcut do. | — | S | ☑ |
 
 **Phone check:** toggle Home off/on keeps its album; Home and Lock with the same album show
 different images; effects change while paused; nothing double-changes.
+
+**Phase 2 notes and deviations:**
+- Work is on branch `phase-2/scheduling-settings`, branched from `phase-1/critical-fixes` (Phase 2
+  builds on it) and kept local like Phase 1. CI was run locally on Windows with the workflow's
+  commands (`gradlew clean test`, then `gradlew :app:lintDebug`) plus a debug build: 142/142 unit
+  tests pass (112 before; 30 new or rewritten), lint 0 errors and the same 18 warnings as the
+  baseline, debug build successful. One Kotlin compiler warning shows up in a file Phase 2
+  touched: the effect sliders use a `Slider` overload that Material 3 1.5 (alpha) deprecates. It
+  is the same overload upstream's code already used; the replacement is a `SliderState` API in
+  an alpha release, so it is left for a later dependency update.
+- 2.1: **one rule changed beyond the plan.** "Every turned-on screen needs an album" became "at
+  least one turned-on screen has an album". So a screen still waiting for its album no longer
+  stops the other screen's job: this fixes the issue found in the Phase 1 test. All readers of
+  the album IDs go through a new `ScheduleSettings.albumFor(screen)`, which returns nothing for a
+  turned-off screen. A turned-off screen's preview in "Current wallpapers" stays empty, as before.
+- 2.2: how it works. A **new** job never runs straight away. A job that takes over from another
+  one covering the same screen keeps that job's next run. That happens when Home and Lock merge
+  into the shared job (same album, no separate schedules), split out of it, or when separate
+  schedules are switched. Any other new job counts a full interval from now. Existing jobs keep
+  their countdown when settings change; I checked the WorkManager 2.11.2 bytecode to confirm
+  that an update keeps a job's first-run time unless it sets a new one. The app itself puts up
+  the first image of a newly turned-on screen (turning the screen on, picking its first album,
+  or turning changing on), without restarting the countdown that was just set. So enabling Lock
+  next to Home changes only Lock, and Home keeps its timing.
+  **Behaviour changes:**
+  - Picking an album changes only that screen. Before, it changed both screens when they shared
+    an album.
+  - Turning changing on changes the static wallpaper through the app rather than through a job
+    that ran straight away.
+  - In live mode, turning changing on no longer advances the live wallpaper; picking the album
+    already does.
+  - Picking another album for a screen that is already rotating restarts that screen's
+    countdown, like any manual change.
+- 2.3: while paused, re-rendering never moves on to another image. While changing is on, a screen
+  with no usable current image may still move on, as before. **Beyond the plan:** only the screens
+  whose look changed are re-rendered; before, an edit to one screen re-rendered both. With
+  neither screen on, the scaling buttons, effect switches, sliders and adaptive brightness are
+  greyed out, with a one-line hint. The horizontal-scrolling switch is left for 3.3.
+- 2.4: **behaviour change:** with the same album on both screens, they now never show the same
+  image, even on the shared job, which used to put one image on both. The only exception is when
+  no other image can rotate (for example, a one-image album). The image the other screen shows is
+  passed over and keeps its place in the queue. The lock screen's ordered rounds start half-way
+  through the album (rounded down), every round, so the two screens stay apart. The single
+  "both screens in one write" path is now used only by "Set wallpaper" on a chosen image.
+- 2.5: the banner sits at the top of the Wallpaper tab in live mode. It is checked each time the
+  screen resumes, so it disappears on return from the picker. Live jobs keep running while the
+  wallpaper isn't set; they do nothing then. The HyperOS "change wallpaper" permission hint from
+  the Phase 1 test is shown on Xiaomi, Redmi and POCO phones, with an "App info" button.
+- 2.6: imports and folder refreshes add new images to rounds already in progress. Ordered rounds
+  take them at their place in the album (a lock round that started half-way still wraps
+  correctly); shuffled rounds take them at random places. Screens with no round yet get them
+  when it is built. Reordering the album and switching shuffle still start a new round, because
+  those are explicit "start over" actions. The merge lives in a new `AddToRotationUseCase`, so
+  the album repository needs no settings.
+- 2.7: **guard beyond the plan:** if a scan finds nothing and the folder itself is gone, the
+  images are kept. Some providers list a deleted folder as empty, and the album refresh removes
+  the whole folder then. The folder screen's message now says deleted files were removed too.
+- 2.8: "a few hours" is 4 hours. The last-refresh time is kept in a small separate preferences
+  file, not in the user's settings. The background check no longer queries every folder image
+  one by one; directly added images still need one query each, because there is no folder to
+  scan for them.
+- 2.9: **slider values are saved when you let go**, not at every step of a drag. Saving each of
+  up to 100 steps would rewrite the settings file constantly and make the slider jump back while
+  the saves catch up. The re-render waits 1.5 s for further edits (it was a 2 s wait before
+  *saving*). The waiting re-render also runs when the screen pauses, not only when it is left:
+  Android 12+ refuses to start the change service from the background, and a delayed start
+  would otherwise crash once the app was in the background. Starting the service is now guarded
+  everywhere the Wallpaper tab uses it. Interval boxes commit on Done, on leaving the boxes, or
+  when the screen goes away; Next moves between the boxes.
+- 2.10: the start destination is decided once, from the first loaded settings, and kept across
+  activity re-creation.
+- 2.11: double-tap and screen-off changes restart the background job's countdown (live intervals
+  of 15 minutes or more). Shorter intervals use the engine's own timer, which double-tap already
+  restarted.
+- For testing, `HomeViewModel` now asks a small `WallpaperChangeRequests` class to start the
+  change service instead of building intents itself.
+- New text has English and Simplified Chinese versions; the Chinese may want a native speaker's
+  polish.
 
 ---
 
