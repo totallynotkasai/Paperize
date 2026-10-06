@@ -34,11 +34,36 @@ jobs:
       - name: Run Android lint
         run: ./gradlew :app:lintDebug
 
+  # Secrets can't be read in a job-level `if`, so this job reports whether signing is set up.
+  # Forks without the signing secrets still run tests and lint; the signed build and release skip.
+  signing:
+    name: Check Signing Secrets
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    outputs:
+      available: ${{ steps.check.outputs.available }}
+    steps:
+      - name: Check for signing secrets
+        id: check
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE_BASE64" ] && [ -n "$SIGNING_KEY_ALIAS" ] \
+            && [ -n "$SIGNING_STORE_PASSWORD" ] && [ -n "$SIGNING_KEY_PASSWORD" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Signing secrets are not all set; skipping the signed build and release."
+          fi
+
   build:
     name: Build Signed APK
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push'
+    needs: [test, signing]
+    if: needs.signing.outputs.available == 'true'
     steps:
       - name: Checkout repository source code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug copy of src/main/res/xml/shortcuts.xml. Static shortcuts need a literal targetPackage,
+     so this one points at the ".debug" application ID. Keep the two files in sync. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="change_wallpaper"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/change_wallpaper_now"
+        android:shortcutLongLabel="@string/change_next_wallpaper_shortcut">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.anthonyla.paperize.service.shortcut.WallpaperShortcutActivity"
+            android:targetPackage="com.anthonyla.paperize.debug" />
+    </shortcut>
+</shortcuts>

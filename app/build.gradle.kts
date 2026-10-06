@@ -44,6 +44,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Installs next to the release app; debug resources rename it and retarget shortcuts.
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
