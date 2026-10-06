@@ -5,6 +5,20 @@
 - Room database schemas are tracked in git so migrations can be tested against them.
 - CI runs tests and lint on every pull request and push to `master`, and skips the signed build and release when signing secrets are not configured.
 
+### Library and albums
+- The album screen has a Reorder action again, opening the drag-to-reorder screen. Albums and folders open in the new "Rotation order" view by default, which shows images in the order they change in.
+- New images keep their place: directly added images stay before folders, and new files found in a folder go to the end of that folder rather than the end of the album.
+- SVG images now work as static and live wallpapers. TIFF is no longer listed as supported, because Android can't decode it; imports skip files in unsupported formats and say how many were skipped.
+- Removing images, folders or albums gives back Android's file permissions that nothing else uses. Imports warn as the app nears Android's limit of 512 kept permissions and stop before it, suggesting a folder instead.
+- Images Paperize can no longer read are marked in the album, with a banner to grant access again or remove them. They are skipped in rotation, and an album whose images all lost access stays selected instead of being treated as empty.
+- The database moves to version 5, adding everything later planned features need in one migration.
+
+### Wallpaper reliability
+- The live wallpaper shows the same image again after a reboot, app update or re-applying it, instead of moving to the next one. The current live image appears in the "Current wallpapers" card.
+- The live wallpaper tries up to 10 queued images when one can't be decoded, like static mode.
+- Live wallpaper previews no longer use up images, and one change event advances the wallpaper once, however many wallpaper engines are running.
+- Scheduled changes now show the same "album empty" and "couldn't change" notifications as manual ones, and stop their background job once changing has been turned off.
+
 ## v4.2.0
 
 ### Library and albums

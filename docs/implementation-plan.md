@@ -88,18 +88,79 @@ check, a long vector path, and a plurals candidate. Device tests have not been r
 
 | ID | Item | Audit ref | Size | Status |
 |----|------|-----------|------|--------|
-| 1.0 | **Schema v5 migration**, designed once for the whole plan: `wallpapers.excluded`, `wallpapers.favorite`, `wallpapers.accessLost`, `albums.effects` (nullable JSON). Includes a migration test. | — | M | ☐ |
-| 1.1 | **Reconnect the reorder screen.** "Reorder" action in the album top bar opens the existing drag-to-reorder screen. Add a "Rotation order" option to the sort sheet and make it the default, so the grid shows the order wallpapers actually rotate in. | #1 | M | ☐ |
-| 1.2 | **New images keep their grouping.** Direct images first, then each folder in its saved order; newly found files go to the end of *their own* folder, not the end of the album. | #14 | S | ☐ |
-| 1.3 | **Unsupported formats.** Decode SVG using the SVG decoder already bundled (via Coil) for static and live. Remove TIFF from the supported list and README. Skip unsupported files at import and report how many. | #2 | M | ☐ |
-| 1.4 | **File-access grants.** Release grants when images, folders or albums are deleted (when nothing else uses that file). Warn at import as individual-image grants approach Android's limit and suggest adding a folder instead. Mark images whose access was lost (`accessLost`) and show a "needs attention" banner with a re-grant action. | #3 | M | ☐ |
-| 1.5 | **Live: remember the current image.** Record it after it appears on screen. On engine start (reboot, process restart, re-applying) show it again instead of advancing. Show it in the "Current wallpapers" card in live mode. | #5 | M | ☐ |
-| 1.6 | **Live: skip undecodable images.** Try up to 10 queued images until one decodes, like static mode. | #7 | S | ☐ |
-| 1.7 | **Live: only the real engine advances.** Preview engines never consume the queue; one receiver registration per service, not per engine. | #21 | S | ☐ |
-| 1.8 | **Scheduled failures are visible.** The scheduled worker shows the same "album empty" / "couldn't change" notifications as manual changes, and cancels its own no-op jobs after auto-disabling. | #6 | S | ☐ |
+| 1.0 | **Schema v5 migration**, designed once for the whole plan: `wallpapers.excluded`, `wallpapers.favorite`, `wallpapers.accessLost`, `albums.effects` (nullable JSON). Includes a migration test. | — | M | ☑ |
+| 1.1 | **Reconnect the reorder screen.** "Reorder" action in the album top bar opens the existing drag-to-reorder screen. Add a "Rotation order" option to the sort sheet and make it the default, so the grid shows the order wallpapers actually rotate in. | #1 | M | ☑ |
+| 1.2 | **New images keep their grouping.** Direct images first, then each folder in its saved order; newly found files go to the end of *their own* folder, not the end of the album. | #14 | S | ☑ |
+| 1.3 | **Unsupported formats.** Decode SVG using the SVG decoder already bundled (via Coil) for static and live. Remove TIFF from the supported list and README. Skip unsupported files at import and report how many. | #2 | M | ☑ |
+| 1.4 | **File-access grants.** Release grants when images, folders or albums are deleted (when nothing else uses that file). Warn at import as individual-image grants approach Android's limit and suggest adding a folder instead. Mark images whose access was lost (`accessLost`) and show a "needs attention" banner with a re-grant action. | #3 | M | ☑ |
+| 1.5 | **Live: remember the current image.** Record it after it appears on screen. On engine start (reboot, process restart, re-applying) show it again instead of advancing. Show it in the "Current wallpapers" card in live mode. | #5 | M | ☑ |
+| 1.6 | **Live: skip undecodable images.** Try up to 10 queued images until one decodes, like static mode. | #7 | S | ☑ |
+| 1.7 | **Live: only the real engine advances.** Preview engines never consume the queue; one receiver registration per service, not per engine. | #21 | S | ☑ |
+| 1.8 | **Scheduled failures are visible.** The scheduled worker shows the same "album empty" / "couldn't change" notifications as manual changes, and cancels its own no-op jobs after auto-disabling. | #6 | S | ☑ |
 
 **Phone check:** reboot keeps the same live image; SVG album works; reorder changes rotation;
 deleting an album frees its grants (`adb shell dumpsys activity` grant list).
+
+**Phase 1 notes and deviations:**
+- Work is on branch `phase-1/critical-fixes`. As asked, CI was run locally on Windows with the
+  same commands as the workflow (`gradlew clean test`, then `gradlew :app:lintDebug`), plus a
+  debug build. Results: 112/112 unit tests pass (86 before, 26 new), lint 0 errors and the same
+  18 warnings as the baseline, debug build successful.
+- 1.0: **one column beyond the plan**, `albums.favoritesMode` (text, default `MARKER_ONLY`).
+  Decision B's per-album Favourites setting needs somewhere to live, and the ground rules want
+  every schema change in this one migration. `albums.effects` stores the effects as JSON; a value
+  that can't be read is ignored, so the screen's own effects apply. Queues already skip
+  `excluded` images, though nothing sets that flag until 5.2. New instrumented test:
+  `Migration4To5InstrumentedTest`; the existing 1–3 → 4 test now runs the whole chain to 5.
+- 1.1: in Rotation order the album grid lists directly added images first and then the folders,
+  because that is the order they rotate in; the other sorts keep folders first. The reorder
+  screen got the same order, a "Rotation order" title (it had none) and a one-line hint. The
+  album grid's sort choice still resets when you leave the album, as before.
+- 1.2: rotation order is now worked out from the structure (direct images, then each folder in
+  its saved order, then each image's position within its group) instead of one album-wide
+  number. So libraries numbered the old way also rotate correctly without being renumbered.
+  Folder refreshes add new files in the same order as the first import (by document URI). The
+  album cover follows the same order.
+- 1.3: SVG goes through Coil's shared image loader with its caches turned off, so wallpaper-sized
+  images don't push thumbnails out. Fill and Stretch render the SVG to cover the screen; Fit and
+  None render it to fit (a vector has no native pixel size, so None behaves like Fit). Folder
+  imports count only skipped files that are images (by type or a known image extension), so
+  text files and similar don't inflate the number.
+- 1.4: grants are released when images, folders or albums are removed, when the album refresh
+  prunes missing files, and (all of them) on "Reset all data" or a mode switch. **Beyond the
+  plan:** imports warn from 400 of Android's 512 kept permissions and *refuse* an import that
+  would go past 512, because Android would otherwise silently drop the oldest permissions and
+  break images that are still in use. "Lost" means no kept permission covers the file (its own
+  for a directly added image, its folder's for a folder image); it is checked when an album
+  opens, after imports, and on each album refresh (app start and 03:00). Unreadable images stay
+  queued but are passed over, so they resume their place when access returns. If every image in
+  an album is unreadable, a change reports "none can be opened" and keeps the album selected,
+  rather than treating it as empty (which would clear the selection and turn changing off). The
+  banner's "Grant access" re-picks the folder (the picker opens at it), or the images, which are
+  matched by URI and otherwise by file name, so a file picked from a different place is
+  relinked. "Remove" removes the unreadable images and folders. Not done: a one-off clean-up of
+  permissions leaked by older versions, because it could race an import in progress; a fresh
+  install (7.3) starts clean anyway.
+- 1.5–1.7: the live service now has one "leader" engine: the first non-preview engine,
+  preferring the one drawing the home screen on Android 14+ (where home and lock can be separate
+  engines). Only the leader takes images from the queue, records the current image once it is
+  on screen, runs the short-interval timer and reacts to screen-off. Double-tap on any real
+  engine asks the leader to advance. Previews and any other engine show the recorded image, or
+  the next one without taking it, and follow the leader. Also fixed: the first settings update
+  after an engine started counted as an album change, which was a second way the wallpaper
+  advanced on start. The per-frame scroll log line was removed.
+- 1.6: the up-to-10 attempts now really decode each image (the old check only queried the URI).
+  If a newer request interrupts a load, the image it had picked goes back to the front of the
+  queue.
+- 1.8: the "couldn't change" notification appears once WorkManager's 3 retries are used up, not
+  on each attempt. The worker uses the scheduler's own rule for which jobs should exist, and when
+  its screen is no longer scheduled (or the album was empty) it cancels the jobs that shouldn't
+  exist, leaving the others' timing alone. Found while testing: if a screen is turned on but has
+  no album, every job stops, not just that screen's. That is existing behaviour; 2.1 changes it.
+- New text has English and Simplified Chinese versions. I wrote the Chinese; a native speaker
+  may want to polish it.
+- Phone check: pending. The device tests need the phone unlocked, and the live-wallpaper steps
+  change the wallpaper, so they wait for you.
 
 ---
 
