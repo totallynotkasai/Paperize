@@ -526,8 +526,8 @@ on and off; an import carries on after leaving the album.
 
 | ID | Item | Size | Status |
 |----|------|------|--------|
-| 4.1 | **Three home-screen widgets: Shuffle Home, Shuffle Lock, Shuffle Both.** | M | ☐ |
-| 4.2 | **Live auto-pan for images that don't fit the screen.** | L | ☐ |
+| 4.1 | **Three home-screen widgets: Shuffle Home, Shuffle Lock, Shuffle Both.** | M | ☑ |
+| 4.2 | **Live auto-pan for images that don't fit the screen.** | L | ☑ |
 
 **4.1 Widgets.** 1×1 icon buttons, resizable to 2×1 with a label, Material You colours and
 previews in the widget picker. A tap moves to the next image for that target through the same
@@ -545,6 +545,143 @@ Nova and the HyperOS launcher.
 - Static wallpapers can't animate, so the option is hidden in static mode. The existing
   horizontal-scrolling option is the closest static equivalent.
 - Battery use is measured on your phone before it's finished.
+
+**Phase 4 notes and deviations:**
+- Work is on branch `phase-4/widgets-autopan`, branched from `phase-3/ui-polish` and kept local
+  like Phases 1–3. CI was run locally on Windows with the workflow's commands (`gradlew clean
+  test`, then `gradlew :app:lintDebug`) plus a debug build, last on the final code including the
+  phone-check fixes: 213/213 unit tests pass (185 before, 28 new), lint 0 errors and the same 18
+  warnings as the baseline (the new widget layouts briefly added 5, which are fixed), debug build
+  successful. The one new Kotlin compiler warning is the speed slider's use of the same deprecated
+  `Slider` overload as the other effect sliders (see Phase 2), left for the same later update.
+- 4.1, how it works: each widget is its own receiver (`ShuffleHomeWidget`, `ShuffleLockWidget`,
+  `ShuffleBothWidget`). A tap reads the settings and then calls the same
+  `WallpaperChangeRequests.changeConfigured` as the tile and shortcut, now with the widget's screen,
+  so it goes through the same service (or background-job fallback, 3.12) and restarts the countdown.
+  In live mode all three change the live wallpaper. Shuffle Both changes each screen that is turned
+  on, as the tile does.
+- 4.1, look: one cell is an icon button: the target's glyph (a house, a padlock, or both side by
+  side) with a small shuffle badge. Widened to two cells it also shows the name. Android 12+ picks
+  between the two layouts from the widget's size by itself, so this works on any launcher. Widening
+  is meant to stop at about two cells (220 dp), and the height stays one cell; Nova ignores the
+  limit and let you widen them to three cells, which the two-cell layout handles. Colours are Material You roles
+  from the system palette (`system_accent1_*`, `system_neutral2_*`) with light and dark versions;
+  the launcher resolves them, so they follow the wallpaper's colours and the dark theme. The widget
+  picker gets a drawn preview (`previewLayout`) and, for launchers that don't draw those, an image
+  (`previewImage`).
+- 4.1, "not set up": a short Android toast says what to set up ("Turn on Lock and pick its album
+  in Paperize first."). Android 12+ cuts toasts off after two lines, so every widget message is
+  kept short (the phone check found the longer in-app live message cut off mid-word). **Beyond
+  the plan:**
+  - Like the tile, a widget that can't change anything is greyed out (neutral background, faded
+    glyph, no badge, and "Not set up" in the two-cell layout), and screen readers hear "Shuffle
+    Lock, not set up". Widgets are redrawn when the settings change, from an observer that runs
+    with the app's process (every settings change happens there), so there are no timed updates
+    (`updatePeriodMillis` is 0).
+  - In live mode a tap also says "Paperize isn't your live wallpaper" when it isn't, since nothing
+    visible would change.
+  - Shuffle Lock confirms a tap with "Changing the lock screen wallpaper…", because the lock screen
+    can't be seen from the home screen (Shuffle Both too, while only Lock is turned on). Failures
+    still become the usual notifications.
+- 4.1, existing behaviour worth knowing: when Home and Lock share an album on one schedule, Shuffle
+  Home or Shuffle Lock restarts that shared countdown, so the other screen's next automatic change
+  moves too. The tile, shortcut and "Change wallpaper now" have done the same since Phase 2.
+- 4.1, names: the picker shows "Shuffle Home", "Shuffle Lock" and "Shuffle Both" as planned, though a
+  tap moves to the next image in rotation order unless Shuffle is on. The Chinese names are
+  "主页换一张", "锁屏换一张" and "全部换一张" ("change one").
+- 4.2, the setting: "Auto-Pan Cut-Off Images" in live mode's Interactive Effects card, below
+  Parallax (title case like its neighbours), with a short description. Under Fit or Stretch the switch is greyed out and says
+  "Works with Fill or None scaling.". It is stored with the live effects (`WallpaperEffects`
+  gains `enableAutoPan` and `autoPanSweepSeconds`, saved under two new preference keys), so 5.3's
+  per-album effects can carry it later; no database change. Older per-album effects JSON reads
+  with the defaults.
+- 4.2, speed: a sweep is one pass from one edge to the other; there and back is two sweeps. The
+  slider has 10 stops from slow (left) to fast (right): 5 min, 3 min, 2 min, 90 s, 60 s (default),
+  45 s, 30 s, 20 s, 15 s and 10 s per sweep. It is saved when you let go, and screen readers hear
+  "1 minute per sweep" rather than a percentage.
+- 4.2, motion: a cosine ease, at rest at each edge and fastest mid-way. Each new image starts at its
+  top (tall) or left (wide) edge, already there as it fades in. A surface change (rotation, folding)
+  reloads the image, so it starts again too. With None, an image cut off both ways pans along the
+  side it overflows most, relative to the screen. Less than 1% overflow doesn't pan. A sideways
+  pan replaces parallax completely (including parallax's zoom); an up-and-down pan keeps parallax
+  working sideways. The vignette stays fixed to the screen (3.7) while the image moves under it.
+- 4.2, battery: the GL thread can now be asked to draw a frame at a given time, and the renderer
+  asks for the next one just early enough that the image moves at most half a pixel per frame,
+  but never sooner than 33 ms (about 30 fps) and never later than 250 ms. Slow pans, small
+  overflows and the turning points therefore draw far fewer frames: 100 px of overflow at the
+  default speed is about 5 frames a second at its fastest. While the wallpaper is hidden the GL
+  thread is paused and nothing draws; the pan's clock only counts time between drawn frames, so it
+  carries on from where it stopped, and a new speed carries on from the current position.
+  With blur on, every frame re-runs the blur passes, so blur plus auto-pan costs more GPU time.
+- 4.2, **beyond the plan:** live Fill images are now decoded at no more than 4096 × 4096 pixels'
+  worth (16.8 megapixels), shrunk evenly; the GPU scales them back up. A long panorama used to be
+  decoded at full screen height: a 20000 × 1000 panorama on this phone needed 48000 × 2400 pixels
+  (about 460 MB), ran out of memory and was skipped. None still decodes pixel for pixel.
+- New text has English and Simplified Chinese versions; the Chinese may want a native speaker's
+  polish.
+- New unit tests cover the widgets' set-up rules (each target, turned-off screens, live mode, the
+  live-wallpaper check, the lock-screen confirmation), a widget request's round trip, the auto-pan
+  axis, easing, frame pacing and clock, the pan offsets and how they share with parallax, the
+  speed stops and range, and the decode cap. New device test: on the phone's GPU, a tall image
+  starts at its top edge with auto-pan on, the next frame is scheduled within the 33–250 ms window,
+  and with auto-pan off (or under Fit) the image is centred and nothing is scheduled.
+- Device tests (installed with adb and run with `am instrument`, before the live wallpaper was
+  set): 45 passed, 0 failed: 28 in the repository, migration, document-access and display-name
+  classes, 8 live-shader tests (1 new) on the phone's GPU, and all 9 UI tests. Not run, as before:
+  `WallpaperUtilInstrumentedTest`, and the preferences and scheduler tests. The UI tests waited
+  while the phone was locked and carried on once you unlocked it.
+- Phone check, widgets (2026-10-06, Nova, Paperize Debug in static mode, album Phase2, changing
+  paused; Lock turned off first so only the home screen changed, as you chose). Changes were
+  counted with the wallpaper IDs in `dumpsys wallpaper`. Passed:
+  - The widget picker showed the drawn previews. One cell: Shuffle Both and Shuffle Home with
+    their badge, Shuffle Lock greyed out without one (Lock was off).
+  - Shuffle Home changed Home once (ID 2388 → 2390) and not Lock; Android allowed the foreground
+    service from the widget tap ("Background started FGS: Allowed"). Shuffle Both, with only Home
+    on, changed Home once and showed no message. The greyed Shuffle Lock showed "Turn on Lock and
+    pick its album in Paperize first." and changed nothing.
+  - Turning Lock on in the app un-greyed Shuffle Lock straight away, with no wallpaper change;
+    turning it off greyed it again.
+  - Widened, all three showed their name; Shuffle Lock showed "Not set up". In dark theme they
+    switched to the dark Material You colours. Screen readers get one item per widget ("Shuffle
+    Lock, not set up").
+  - In live mode (below) all three were usable; before the live wallpaper was set, a tap said
+    "Paperize isn't your live wallpaper", and once it was set, Shuffle Home moved the live
+    wallpaper on to the next image.
+  - **Found and fixed** (in the commit after the Phase 4 commit): the badge covered the right side
+    of the padlock's shackle, so Shuffle Lock looked "unlocked" (glyph and badge are now further
+    apart); the live message was cut off by the two-line toast limit (messages shortened); the
+    widened widget's texts could be read a second time by screen readers (now hidden from them);
+    the auto-pan description was eight lines long in the card (shortened).
+  - One extra Home change at 19:54 came from a widget tap while you were resizing; Home only.
+  - Not checked: the HyperOS launcher (Nova only, as you chose).
+- Phone check, auto-pan (Paperize Debug switched to live mode, which reset its own albums only;
+  album Phase4 = a folder with a 1200 × 5200 tall image and a 6000 × 1500 panorama; the live
+  wallpaper set on the home screen only). Passed:
+  - Screenshots 15 s apart at the default speed: the tall image started at its top edge (bands
+    1–5), had moved about one band at 15 s and reached the middle (bands 4–8) at 30 s; the
+    panorama started at its left edge and reached the middle at 30 s. Both match the cosine ease.
+  - The panorama decoded at 8192 × 2048 instead of 10432 × 2608 (the decode cap), as two GPU tiles.
+  - Frames and CPU, 60 s each (frames of the wallpaper's own surface from SurfaceFlinger, CPU from
+    `/proc`): auto-pan off 0 frames and 10 ms CPU; tall image 27.8 fps and 3.5% of one core;
+    panorama 29.3 fps and 3.7% of one core; wallpaper hidden behind an app 0 frames and 20 ms CPU.
+  - **Battery** (Android's own estimate, `dumpsys batterystats`, with charging reporting switched
+    off by `dumpsys battery unplug` and reset afterwards; HyperOS refused a stats reset, so these
+    are differences between snapshots), 5 minutes on the home screen with the panorama each:
+    auto-pan on, Paperize Debug 0.71 mAh and the system (which includes SurfaceFlinger's
+    compositing) 3.43 mAh; off, 0.04 mAh and 2.26 mAh. All apps together: 13.75 mAh on, 10.82 mAh
+    off. So auto-pan costs roughly 2–3 mAh per 5 minutes that the home screen is on show, about
+    0.3–0.5% of this phone's 7500 mAh battery per hour of visible home screen, and nothing while
+    the screen is off or an app covers the wallpaper. Android's estimate doesn't model the GPU, so
+    the real cost is somewhat higher. If that is too much, the frame-rate cap (30 fps) is one
+    constant (`AutoPan.MIN_FRAME_INTERVAL_MS`); 20 fps would save about a third.
+  - 4.1.1 was untouched (same version and install time).
+- Left on the phone: Paperize Debug in live mode with album Phase4, auto-pan off, changing paused,
+  and its live wallpaper on your home screen (the lock screen wasn't touched). 4.1.1's next
+  scheduled change puts its own static wallpaper back on the home screen, or you can pick one in
+  the phone's wallpaper settings. The three Shuffle widgets are still on a Nova page; remove them
+  there if you don't want them. The test folders `Pictures/PaperizePhase2` and
+  `Pictures/PaperizePhase4` are still on the phone. The phone's installed Paperize Debug has the
+  longer auto-pan description; the final build on this branch has the short one.
 
 ---
 

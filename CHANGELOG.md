@@ -51,6 +51,16 @@
 ### Development setup
 - Test fixtures shared by unit and device tests live in `app/src/sharedTest`; unused code and the JitPack repository were removed.
 
+### Widgets
+- Three home-screen widgets: Shuffle Home, Shuffle Lock and Shuffle Both. Each is a one-cell button that can be widened to two cells to show its name, uses your wallpaper's Material You colours in light and dark, and has a preview in the widget picker.
+- A tap shows the next image for that screen and restarts its countdown, like the tile and shortcut. In live mode all three change the live wallpaper.
+- A widget whose screen isn't set up is greyed out, and a tap says what to set up. Shuffle Lock confirms its tap with a short message, since the lock screen can't be seen from the home screen.
+
+### Live wallpaper
+- New "Auto-Pan Cut-Off Images" setting: when Fill or None cuts part of an image off, it slowly moves up and down (tall images) or side to side (wide images), easing at each end, and starts again at the top or left with each new image. A speed slider runs from 5 minutes to 10 seconds per sweep (default: 1 minute).
+- Auto-pan draws frames only while the wallpaper is visible, at most about 30 a second and far fewer for slow or short pans. On wide images it takes the place of parallax.
+- Very long panoramas are decoded at a capped size in live mode, so they no longer run out of memory and get skipped.
+
 ## v4.2.0
 
 ### Library and albums
