@@ -10,6 +10,8 @@ import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
 import com.anthonyla.paperize.service.WallpaperChangeLock
 import com.anthonyla.paperize.service.WallpaperNotifier
+import com.anthonyla.paperize.service.schedule.ChangeBlock
+import com.anthonyla.paperize.service.schedule.ChangeConditions
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult.Kind
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult.Outcome
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
@@ -39,16 +41,18 @@ class WallpaperRequestHandlerTest {
     private val scheduler = mockk<WallpaperScheduler>(relaxed = true)
     private val wallpapers = mockk<WallpaperRepository>()
     private val notifier = mockk<WallpaperNotifier>(relaxed = true)
+    private val conditions = mockk<ChangeConditions> { every { automaticChangeBlock(any()) } returns null }
     private var appInForeground = false
     private val events = WallpaperChangeEvents(appInForeground = { appInForeground }, clock = { 0L })
     private val handler = WallpaperRequestHandler(
-        context, controller, settings, WallpaperChangeLock(), scheduler, wallpapers, notifier, events
+        context, controller, settings, WallpaperChangeLock(), scheduler, wallpapers, notifier, events, conditions
     )
     private val scheduled = ScheduleSettings(enableChanger = true, homeEnabled = true, homeAlbumId = "album")
 
     @Before fun setUp() {
         mockkStatic(Log::class)
         every { Log.e(any(), any(), any()) } returns 0
+        every { Log.d(any(), any()) } returns 0
         mockkStatic("com.anthonyla.paperize.core.util.WallpaperUtilKt")
         every { isPaperizeLiveWallpaperActive(any()) } returns true
         coEvery { settings.getWallpaperMode() } returns WallpaperMode.STATIC
@@ -127,5 +131,27 @@ class WallpaperRequestHandlerTest {
         assertEquals(listOf(WallpaperChangeResult(Kind.SET_CHOSEN, Outcome.CHANGED)), shown)
         coVerify { controller.applySpecific("album", "chosen", ScreenType.LOCK, scheduled) }
         coVerify { scheduler.resetAfterManualChange(ScreenType.LOCK, scheduled, WallpaperMode.STATIC) }
+    }
+
+    @Test fun `an automatic change waits while paused or held back by the battery settings`() = runTest {
+        coEvery { settings.getScheduleSettings() } returns scheduled.copy(enableChanger = false)
+        handler.handle(WallpaperRequest.Change(ScreenType.HOME, automatic = true), report = false)
+        coEvery { settings.getScheduleSettings() } returns scheduled
+        every { conditions.automaticChangeBlock(any()) } returns ChangeBlock.BATTERY_SAVER
+        handler.handle(WallpaperRequest.Change(ScreenType.HOME, automatic = true), report = false)
+        coVerify(exactly = 0) { controller.change(any(), any()) }
+        coVerify(exactly = 0) { scheduler.resetAfterManualChange(any(), any(), any()) }
+    }
+
+    @Test fun `a change by hand happens whatever the battery settings say`() = runTest {
+        every { conditions.automaticChangeBlock(any()) } returns ChangeBlock.NOT_CHARGING
+        handler.handle(WallpaperRequest.Change(ScreenType.HOME), report = false)
+        coVerify { controller.change(ScreenType.HOME, scheduled) }
+    }
+
+    @Test fun `an allowed automatic change restarts the countdown like a manual one`() = runTest {
+        handler.handle(WallpaperRequest.Change(ScreenType.HOME, automatic = true), report = false)
+        coVerify { controller.change(ScreenType.HOME, scheduled) }
+        coVerify { scheduler.resetAfterManualChange(ScreenType.HOME, scheduled, WallpaperMode.STATIC) }
     }
 }

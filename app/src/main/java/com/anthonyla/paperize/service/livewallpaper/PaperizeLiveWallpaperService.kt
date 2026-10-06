@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.anthonyla.paperize.R
 import com.anthonyla.paperize.core.ScalingType
+import com.anthonyla.paperize.core.ScheduleType
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.core.constants.Constants
@@ -34,6 +35,7 @@ import com.anthonyla.paperize.service.livewallpaper.renderer.LiveSelection
 import com.anthonyla.paperize.service.livewallpaper.renderer.LiveWallpaperImageLoader
 import com.anthonyla.paperize.service.livewallpaper.renderer.PaperizeRenderController
 import com.anthonyla.paperize.service.livewallpaper.renderer.PaperizeWallpaperRenderer
+import com.anthonyla.paperize.service.schedule.ChangeConditions
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -69,6 +71,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
     @Inject lateinit var albumRepository: AlbumRepository
     @Inject lateinit var wallpaperRepository: WallpaperRepository
     @Inject lateinit var wallpaperScheduler: WallpaperScheduler
+    @Inject lateinit var changeConditions: ChangeConditions
 
     companion object {
         private const val TAG = "PaperizeLiveWallpaper"
@@ -218,7 +221,8 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                     return@withContext EmptyImageLoader
                 }
                 val settings = settingsRepository.getScheduleSettings()
-                val albumId = settings.liveAlbumId ?: run {
+                // At night this is the night album, if there is one (plan 6.4).
+                val albumId = settings.albumFor(ScreenType.LIVE) ?: run {
                     Log.w(TAG, "No live album ID set")
                     return@withContext EmptyImageLoader
                 }
@@ -307,7 +311,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                     Pair(settings, mode)
                 }.flatMapLatest { (settings, mode) ->
                     // The live album's own effects replace the live effects (plan 5.3).
-                    val albumEffects = settings.liveAlbumId?.let { albumRepository.getAlbumEffectsFlow(it) } ?: flowOf(null)
+                    val albumEffects = settings.albumFor(ScreenType.LIVE)?.let { albumRepository.getAlbumEffectsFlow(it) } ?: flowOf(null)
                     albumEffects.map { Triple(settings, mode, it) }
                 }.catch { e ->
                     Log.e(TAG, "Error observing settings", e)
@@ -315,8 +319,12 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                     val timerConfigurationChanged =
                         latestWallpaperMode != mode ||
                             latestSettings.enableChanger != settings.enableChanger ||
-                            latestSettings.liveAlbumId != settings.liveAlbumId ||
-                            latestSettings.liveIntervalMinutes != settings.liveIntervalMinutes
+                            latestSettings.albumFor(ScreenType.LIVE) != settings.albumFor(ScreenType.LIVE) ||
+                            latestSettings.liveIntervalMinutes != settings.liveIntervalMinutes ||
+                            latestSettings.scheduleType != settings.scheduleType
+                    // The same albums picked, but the other one now in use: day turned to night or back.
+                    val dayNightSwitch = latestSettings.liveAlbumId == settings.liveAlbumId &&
+                        latestSettings.liveNightAlbumId == settings.liveNightAlbumId
                     latestSettings = settings
                     latestWallpaperMode = mode
                     if (timerConfigurationChanged) restartLiveIntervalTimer()
@@ -325,7 +333,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                         return@collect
                     }
 
-                    val albumId = settings.liveAlbumId
+                    val albumId = settings.albumFor(ScreenType.LIVE)
                     val effects = settings.liveEffects.withAlbumEffects(albumEffects)
                     val scalingType = settings.liveScalingType
 
@@ -358,7 +366,11 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                         ).show()
                     }
 
-                    if (albumChanged) {
+                    if (albumChanged && dayNightSwitch && !automaticChangeAllowed(settings)) {
+                        // Like a static screen, the switch waits while paused or held back by the battery
+                        // settings; the next change comes from the album now in use.
+                        Log.d(TAG, "Day/night switch to $albumId; not changing now")
+                    } else if (albumChanged) {
                         Log.d(TAG, "Album changed to $albumId, reloading")
                         shownWallpaper = null
                         if (isLeader) advance() else renderController.reloadCurrentArtwork()
@@ -431,7 +443,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
         fun handleScreenOff() {
             engineScope.launch {
                 val settings = settingsRepository.getScheduleSettings()
-                if (settings.liveEffects.enableChangeOnScreenOff && isLeader) {
+                if (settings.liveEffects.enableChangeOnScreenOff && isLeader && changeConditions.automaticChangeBlock(settings) == null) {
                     Log.d(TAG, "Screen off - changing wallpaper")
                     // Load while the screen is off, bypassing the visibility check.
                     val previous = nextSelection
@@ -461,6 +473,10 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
             }
         }
 
+        /** Whether an automatic change may happen now: changing is on and the battery settings allow it. */
+        private fun automaticChangeAllowed(settings: ScheduleSettings): Boolean =
+            settings.enableChanger && changeConditions.automaticChangeBlock(settings) == null
+
         private fun restartLiveIntervalTimer() {
             liveIntervalJob?.cancel()
             liveIntervalJob = null
@@ -471,7 +487,8 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                     isLeader &&
                     latestWallpaperMode == WallpaperMode.LIVE &&
                     latestSettings.enableChanger &&
-                    latestSettings.liveAlbumId != null &&
+                    latestSettings.albumFor(ScreenType.LIVE) != null &&
+                    latestSettings.scheduleType == ScheduleType.INTERVAL &&
                     usesVisibleLiveTimer(intervalMinutes)
             if (!shouldRun) return
 
@@ -479,6 +496,12 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                 val intervalMillis = intervalMinutes.toLong() * 60_000L
                 while (isActive) {
                     delay(intervalMillis)
+                    val block = changeConditions.automaticChangeBlock(latestSettings)
+                    if (block != null) {
+                        // Plan 6.1: this turn is skipped; the next one checks again.
+                        Log.d(TAG, "Visible live interval elapsed; not changing ($block)")
+                        continue
+                    }
                     Log.d(TAG, "Visible live interval elapsed; changing wallpaper")
                     nextSelection = LiveSelection.ADVANCE
                     renderController.reloadCurrentArtwork(immediate = true)

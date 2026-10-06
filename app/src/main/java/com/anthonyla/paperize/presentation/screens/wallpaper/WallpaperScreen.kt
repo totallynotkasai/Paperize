@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.R
 import com.anthonyla.paperize.core.ScalingType
+import com.anthonyla.paperize.core.ScheduleType
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.domain.model.AlbumSummary
@@ -58,9 +59,13 @@ import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.presentation.common.components.SettingSwitchItem
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.AlbumSelectionBottomSheet
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.AutoPanSetting
+import com.anthonyla.paperize.presentation.screens.wallpaper.components.ChangeTimesCard
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.CurrentLiveWallpaperPreview
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.CurrentWallpaperPreview
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.LiveWallpaperBanner
+import com.anthonyla.paperize.presentation.screens.wallpaper.components.InlineSwitchRow
+import com.anthonyla.paperize.presentation.screens.wallpaper.components.ScheduleTypeChoice
+import com.anthonyla.paperize.presentation.screens.wallpaper.components.SchedulingOptionsCard
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.SettingSwitchWithSlider
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.disabledUnless
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.TimeIntervalPicker
@@ -88,7 +93,8 @@ fun WallpaperScreen(
     modifier: Modifier = Modifier,
     liveWallpaperUri: String? = null,
     liveWallpaperNotSet: Boolean = false,
-    changeInProgress: Boolean = false
+    changeInProgress: Boolean = false,
+    onOpenSchedulingOptions: () -> Unit = {}
 ) {
     var albumSelectionContext by rememberSaveable { mutableStateOf<AlbumSelectionContext?>(null) }
     var showEmptyAlbumWarning by rememberSaveable { mutableStateOf(false) }
@@ -193,17 +199,6 @@ fun WallpaperScreen(
                 onClick = { albumSelectionContext = AlbumSelectionContext.LIVE }
             )
         }
-        if (wallpaperMode == WallpaperMode.STATIC && scheduleSettings.enableChanger && homeEnabled && lockEnabled) {
-            SettingSwitchItem(
-                title = stringResource(R.string.individual_scheduling),
-                description = stringResource(R.string.show_interval_sliders),
-                checked = scheduleSettings.separateSchedules,
-                onCheckedChange = { enabled ->
-                    updateSettingsImmediate(scheduleSettings.copy(separateSchedules = enabled))
-                }
-            )
-        }
-
         val hasAlbumSelected = scheduleSettings.activeScreens(wallpaperMode).isNotEmpty()
         val allRequiredAlbumsSelected = scheduleSettings.hasRequiredAlbums(wallpaperMode)
 
@@ -215,8 +210,29 @@ fun WallpaperScreen(
                 onCheckedChange = onToggleChanger
             )
         }
+        val usesTimes = scheduleSettings.scheduleType == ScheduleType.TIMES
         if (hasAlbumSelected) {
-            if (wallpaperMode == WallpaperMode.STATIC) {
+            ScheduleTypeChoice(
+                selected = scheduleSettings.scheduleType,
+                onSelect = { type -> updateSettingsImmediate(scheduleSettings.copy(scheduleType = type)) }
+            )
+            // Set times apply to every screen, so separate intervals only matter for the interval schedule.
+            if (wallpaperMode == WallpaperMode.STATIC && scheduleSettings.enableChanger && homeEnabled && lockEnabled && !usesTimes) {
+                SettingSwitchItem(
+                    title = stringResource(R.string.individual_scheduling),
+                    description = stringResource(R.string.show_interval_sliders),
+                    checked = scheduleSettings.separateSchedules,
+                    onCheckedChange = { enabled ->
+                        updateSettingsImmediate(scheduleSettings.copy(separateSchedules = enabled))
+                    }
+                )
+            }
+            if (usesTimes) {
+                ChangeTimesCard(
+                    times = scheduleSettings.changeTimes,
+                    onTimesChange = { times -> updateSettingsImmediate(scheduleSettings.copy(changeTimes = times)) }
+                )
+            } else if (wallpaperMode == WallpaperMode.STATIC) {
                 if (!scheduleSettings.separateSchedules || !homeEnabled || !lockEnabled) {
                     TimeIntervalPicker(
                         title = stringResource(R.string.interval_text),
@@ -268,6 +284,7 @@ fun WallpaperScreen(
                     modifier = Modifier.padding(horizontal = AppSpacing.large)
                 )
             }
+            SchedulingOptionsCard(settings = scheduleSettings, mode = wallpaperMode, onClick = onOpenSchedulingOptions)
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = AppSpacing.small))
@@ -715,38 +732,6 @@ private fun ScreenLabel(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.semantics { heading() }
     )
-}
-
-/** A switch row inside a card that already has its own padding; the whole row toggles. */
-@Composable
-private fun InlineSwitchRow(
-    title: String,
-    description: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
-            .padding(vertical = AppSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(AppSpacing.large)
-    ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AppSpacing.extraSmall)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Switch(checked = checked, onCheckedChange = null)
-    }
 }
 
 @Composable

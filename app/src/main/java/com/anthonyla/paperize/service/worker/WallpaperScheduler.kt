@@ -2,14 +2,18 @@ package com.anthonyla.paperize.service.worker
 
 import android.content.Context
 import android.util.Log
+import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.anthonyla.paperize.core.ScheduleType
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.domain.model.ScheduleSettings
+import com.anthonyla.paperize.service.schedule.DarkThemeChecks
+import com.anthonyla.paperize.service.schedule.TimeOfDayAlarms
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -21,7 +25,9 @@ import kotlinx.coroutines.sync.withLock
 
 @Singleton
 class WallpaperScheduler @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val timeOfDayAlarms: TimeOfDayAlarms,
+    private val darkThemeChecks: DarkThemeChecks
 ) {
     private val workManager = WorkManager.getInstance(context)
     private val mutex = Mutex()
@@ -41,7 +47,8 @@ class WallpaperScheduler @Inject constructor(
         intervalMinutes: Int,
         resetInterval: Boolean = false,
         onlyIfNotScheduled: Boolean = false,
-        firstRunAt: Long? = null
+        firstRunAt: Long? = null,
+        requiresCharging: Boolean = false
     ) {
 
         val adjustedInterval = intervalMinutes.toLong().coerceAtLeast(Constants.MIN_INTERVAL_MINUTES.toLong())
@@ -61,6 +68,8 @@ class WallpaperScheduler @Inject constructor(
             .setInputData(inputData)
             .addTag(getWorkTag(screenType))
             .apply {
+                // "Only while charging" (plan 6.1): a change that falls due unplugged waits for the charger.
+                if (requiresCharging) setConstraints(Constraints.Builder().setRequiresCharging(true).build())
                 // New periodic work otherwise runs immediately. Unlike an initial delay, this
                 // one-run deadline also survives unrelated UPDATE requests from settings edits.
                 if (nextRun != null) setNextScheduleTimeOverride(nextRun)
@@ -88,7 +97,8 @@ class WallpaperScheduler @Inject constructor(
             scheduleWallpaperChange(
                 screenType = scheduledScreen,
                 intervalMinutes = settings.intervalMinutes(scheduledScreen),
-                resetInterval = true
+                resetInterval = true,
+                requiresCharging = settings.onlyWhileCharging
             )
         }
     }
@@ -117,12 +127,18 @@ class WallpaperScheduler @Inject constructor(
                 val firstRunAt = if (pending[screen] != null) null else {
                     firstRunForNewJob(screen, interval, pending.filterKeys { it !in targets }, now)
                 }
-                scheduleWallpaperChange(screen, interval, onlyIfNotScheduled = onlyIfNotScheduled, firstRunAt = firstRunAt)
+                scheduleWallpaperChange(
+                    screen, interval, onlyIfNotScheduled = onlyIfNotScheduled, firstRunAt = firstRunAt,
+                    requiresCharging = settings.onlyWhileCharging
+                )
             } else {
                 cancelWallpaperChange(screen)
             }
         }
         if (enabled) scheduleAlbumRefresh(onlyIfNotScheduled) else cancelAlbumRefresh()
+        // Set times and the clock day/night switch use alarms; dark-theme switches have their own checks.
+        timeOfDayAlarms.sync(settings, mode)
+        darkThemeChecks.sync(settings, mode)
     }
 
     /** The next run of this screen's unfinished job, [Long.MAX_VALUE] if unknown, or null if none. */
@@ -143,6 +159,8 @@ class WallpaperScheduler @Inject constructor(
         workManager.cancelUniqueWork(Constants.WORK_NAME_BOTH)
         workManager.cancelUniqueWork(Constants.WORK_NAME_LIVE)
         cancelAlbumRefresh()
+        timeOfDayAlarms.cancel()
+        darkThemeChecks.cancel()
         Log.d(TAG, "Cancelled all wallpaper change schedules")
     }
 
@@ -203,9 +221,10 @@ class WallpaperScheduler @Inject constructor(
 
 }
 
-/** The periodic jobs these settings call for. Short live intervals run in the visible engine instead. */
+/** The periodic jobs these settings call for. Short live intervals run in the visible engine, and set times use alarms. */
 internal fun scheduledScreens(settings: ScheduleSettings, mode: WallpaperMode): Set<ScreenType> {
     if (!settings.enableChanger || !settings.hasRequiredAlbums(mode)) return emptySet()
+    if (settings.scheduleType == ScheduleType.TIMES) return emptySet()
     return settings.activeScreens(mode).filterTo(mutableSetOf()) { screen ->
         val interval = settings.intervalMinutes(screen)
         interval > 0 && !(screen == ScreenType.LIVE && interval < Constants.MIN_INTERVAL_MINUTES)
@@ -243,6 +262,8 @@ internal fun scheduledScreensToReset(
     wallpaperMode: WallpaperMode
 ): Set<ScreenType> {
     if (!settings.enableChanger || !settings.hasRequiredAlbums(wallpaperMode)) return emptySet()
+    // Set times don't move when the wallpaper is changed by hand.
+    if (settings.scheduleType == ScheduleType.TIMES) return emptySet()
     return settings.activeScreens(wallpaperMode).filterTo(mutableSetOf()) { screen ->
         when (screen) {
             ScreenType.LIVE -> manualScreen == ScreenType.LIVE &&

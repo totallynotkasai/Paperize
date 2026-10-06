@@ -57,6 +57,12 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateLiveAlbumId(albumId: String?) =
         preferencesManager.updateLiveAlbumId(albumId)
 
+    override suspend fun updateNightAlbumId(screen: ScreenType, albumId: String?) =
+        preferencesManager.updateNightAlbumId(screen, albumId)
+
+    override suspend fun updateNightActive(active: Boolean): Boolean =
+        preferencesManager.updateNightActive(active)
+
     override suspend fun clearAlbumSelectionsIfMatches(albumId: String): Boolean =
         preferencesManager.clearAlbumSelectionsIfMatches(albumId)
 

@@ -9,19 +9,24 @@ import androidx.work.Operation
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.anthonyla.paperize.core.ScheduleType
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.domain.model.ScheduleSettings
+import com.anthonyla.paperize.service.schedule.DarkThemeChecks
+import com.anthonyla.paperize.service.schedule.TimeOfDayAlarms
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import io.mockk.unmockkAll
+import io.mockk.verify
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -34,6 +39,8 @@ class WallpaperSchedulerTest {
     private val enqueued = mutableListOf<Triple<String, ExistingPeriodicWorkPolicy, PeriodicWorkRequest>>()
     private val cancelled = mutableListOf<String>()
     private lateinit var scheduler: WallpaperScheduler
+    private val alarms = mockk<TimeOfDayAlarms>(relaxed = true)
+    private val darkThemeChecks = mockk<DarkThemeChecks>(relaxed = true)
 
     @Before
     fun setUp() {
@@ -50,7 +57,7 @@ class WallpaperSchedulerTest {
             operation
         }
         every { workManager.getWorkInfosForUniqueWorkFlow(any()) } returns flowOf(emptyList())
-        scheduler = WallpaperScheduler(context)
+        scheduler = WallpaperScheduler(context, alarms, darkThemeChecks)
     }
 
     private fun pending(name: String, nextRun: Long) {
@@ -102,6 +109,30 @@ class WallpaperSchedulerTest {
     @Test fun `a screen still waiting for its album doesn't stop the other one`() = runTest {
         scheduler.updateSchedules(sharedAlbum.copy(lockAlbumId = null), WallpaperMode.STATIC)
         assertEquals(setOf(Constants.WORK_NAME_HOME, Constants.WORK_NAME_REFRESH), enqueued.map { it.first }.toSet())
+    }
+
+    @Test fun `set times replace the interval jobs, and the alarms and theme checks follow every update`() = runTest {
+        val times = sharedAlbum.copy(scheduleType = ScheduleType.TIMES)
+        scheduler.updateSchedules(times, WallpaperMode.STATIC)
+        assertEquals(setOf(Constants.WORK_NAME_REFRESH), enqueued.map { it.first }.toSet())
+        verify { alarms.sync(times, WallpaperMode.STATIC, any()) }
+        verify { darkThemeChecks.sync(times, WallpaperMode.STATIC) }
+        assertTrue(scheduledScreensToReset(ScreenType.BOTH, times, WallpaperMode.STATIC).isEmpty())
+    }
+
+    @Test fun `only while charging makes every interval job wait for the charger`() = runTest {
+        scheduler.updateSchedules(sharedAlbum.copy(onlyWhileCharging = true), WallpaperMode.STATIC)
+        assertTrue(request(Constants.WORK_NAME_BOTH).workSpec.constraints.requiresCharging())
+        scheduler.resetAfterManualChange(ScreenType.HOME, sharedAlbum.copy(onlyWhileCharging = true), WallpaperMode.STATIC)
+        assertTrue(enqueued.last().third.workSpec.constraints.requiresCharging())
+        scheduler.updateSchedules(sharedAlbum, WallpaperMode.STATIC)
+        assertFalse(request(Constants.WORK_NAME_BOTH).workSpec.constraints.requiresCharging())
+    }
+
+    @Test fun `cancelling everything also cancels the alarms and theme checks`() {
+        scheduler.cancelAllWallpaperChanges()
+        verify { alarms.cancel() }
+        verify { darkThemeChecks.cancel() }
     }
 
     @After

@@ -31,6 +31,9 @@ data class WallpaperViewRoute(
 data class SortRoute(val albumId: String)
 
 @Serializable
+object SchedulingRoute
+
+@Serializable
 object SettingsRoute
 
 @Serializable

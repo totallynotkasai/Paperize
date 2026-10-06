@@ -4,6 +4,8 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
@@ -19,8 +21,10 @@ import com.anthonyla.paperize.presentation.common.navigation.util.exitTransition
 import com.anthonyla.paperize.presentation.screens.album_view.AlbumViewScreen
 import com.anthonyla.paperize.presentation.screens.folder_view.FolderViewScreen
 import com.anthonyla.paperize.presentation.screens.home.HomeScreen
+import com.anthonyla.paperize.presentation.screens.home.HomeViewModel
 import com.anthonyla.paperize.presentation.screens.notification.NotificationPermissionScreen
 import com.anthonyla.paperize.presentation.screens.privacy.PrivacyScreen
+import com.anthonyla.paperize.presentation.screens.scheduling.SchedulingScreen
 import com.anthonyla.paperize.presentation.screens.settings.SettingsScreen
 import com.anthonyla.paperize.presentation.screens.sort.SortViewScreen
 import com.anthonyla.paperize.presentation.screens.startup.StartupScreen
@@ -101,7 +105,17 @@ fun NavigationGraph(
                 },
                 onNavigateToAlbum = { albumId ->
                     navController.navigate(AlbumRoute(albumId))
-                }
+                },
+                onNavigateToScheduling = { navController.navigate(SchedulingRoute) }
+            )
+        }
+
+        composable<SchedulingRoute> { entry ->
+            // Shares the Wallpaper tab's view model, so edits save and reschedule the same way.
+            val homeEntry = remember(entry) { navController.getBackStackEntry<HomeRoute>() }
+            SchedulingScreen(
+                onBackClick = { navController.popBackStack() },
+                viewModel = hiltViewModel<HomeViewModel>(homeEntry)
             )
         }
 

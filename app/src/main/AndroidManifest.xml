@@ -81,8 +81,33 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+
+        <!-- Set times and the clock day/night switch (inexact alarms, no special permission) -->
+        <receiver
+            android:name=".service.schedule.TimeOfDayReceiver"
+            android:exported="false" />
+
+        <!-- Watches the dark-theme settings while Paperize isn't running -->
+        <service
+            android:name=".service.schedule.DarkThemeJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <!-- Static mode's screen-off and unlock changes. Android delivers these events only to
+             running apps, so this listens in the foreground while the user has them turned on. -->
+        <service
+            android:name=".service.schedule.ScreenEventService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Changes the wallpaper when the screen turns off or the phone is unlocked, as the user chose. Android delivers these events only to running apps." />
+        </service>
 
         <!-- Quick Settings Tile -->
         <service

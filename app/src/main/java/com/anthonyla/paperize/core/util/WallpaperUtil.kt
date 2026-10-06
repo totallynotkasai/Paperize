@@ -473,16 +473,15 @@ fun adjustBitmapBrightness(source: Bitmap, brightnessFactor: Float): Bitmap {
     return source
 }
 
-fun getAdaptiveBrightnessMultiplier(context: Context, brightness: Float): Float {
-    val isDarkMode = (context.resources.configuration.uiMode and
-        Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-    
-    return BrightnessCalculator.getAdaptiveMultiplier(isDarkMode, brightness)
-}
+/** The system dark theme, which adaptive brightness follows; the app's own theme choice doesn't change it. */
+fun isSystemDarkTheme(context: Context): Boolean =
+    (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
+fun getAdaptiveBrightnessMultiplier(context: Context, brightness: Float): Float =
+    BrightnessCalculator.getAdaptiveMultiplier(isSystemDarkTheme(context), brightness)
 
 fun adaptiveBrightnessAdjustment(context: Context, source: Bitmap): Bitmap {
-    val isDarkMode = (context.resources.configuration.uiMode and
-        Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+    val isDarkMode = isSystemDarkTheme(context)
 
     val currentBrightness = BrightnessCalculator.calculateBitmapBrightness(source)
     val adjustmentFactor = BrightnessCalculator.getAdaptiveMultiplier(isDarkMode, currentBrightness)

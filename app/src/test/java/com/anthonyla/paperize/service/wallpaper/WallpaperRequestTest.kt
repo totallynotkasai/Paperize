@@ -16,6 +16,8 @@ class WallpaperRequestTest {
             WallpaperRequest.Change(ScreenType.BOTH, followMode = true),
             // A Shuffle Lock widget's tap.
             WallpaperRequest.Change(ScreenType.LOCK, followMode = true),
+            // A set time or day/night switch.
+            WallpaperRequest.Change(ScreenType.BOTH, automatic = true),
             WallpaperRequest.ApplySpecific("wallpaper", ScreenType.BOTH),
             WallpaperRequest.Reapply(ScreenType.HOME)
         ).forEach { request ->

@@ -6,10 +6,12 @@ import com.anthonyla.paperize.R
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.core.util.isPaperizeLiveWallpaperActive
+import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
 import com.anthonyla.paperize.service.WallpaperChangeLock
 import com.anthonyla.paperize.service.WallpaperNotifier
+import com.anthonyla.paperize.service.schedule.ChangeConditions
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult.Kind
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult.Outcome
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
@@ -30,7 +32,8 @@ class WallpaperRequestHandler @Inject constructor(
     private val wallpaperScheduler: WallpaperScheduler,
     private val wallpaperRepository: WallpaperRepository,
     private val notifier: WallpaperNotifier,
-    private val events: WallpaperChangeEvents
+    private val events: WallpaperChangeEvents,
+    private val conditions: ChangeConditions
 ) {
     /** [report] requests were counted by [WallpaperChangeEvents.begin]; this ends them. */
     suspend fun handle(request: WallpaperRequest, report: Boolean) {
@@ -54,11 +57,17 @@ class WallpaperRequestHandler @Inject constructor(
             val mode = settingsRepository.getWallpaperMode()
             val screen = if (request.followMode && mode == WallpaperMode.LIVE) ScreenType.LIVE else request.screen
             val settings = settingsRepository.getScheduleSettings()
-            val outcome = wallpaperController.change(screen, settings)
-            if (outcome.changed && !request.keepSchedule) {
-                wallpaperScheduler.resetAfterManualChange(screen, settings, mode)
+            val skipReason = if (request.automatic) automaticSkipReason(settings) else null
+            if (skipReason != null) {
+                Log.d(TAG, "Not changing $screen automatically: $skipReason")
+                WallpaperChangeResult(Kind.CHANGE, Outcome.NOTHING_TO_CHANGE)
+            } else {
+                val outcome = wallpaperController.change(screen, settings)
+                if (outcome.changed && !request.keepSchedule) {
+                    wallpaperScheduler.resetAfterManualChange(screen, settings, mode)
+                }
+                result(Kind.CHANGE, outcome, screen)
             }
-            result(Kind.CHANGE, outcome, screen)
         }
         is WallpaperRequest.ApplySpecific -> {
             require(request.wallpaperId.isNotBlank()) { context.getString(R.string.wallpaper_not_found) }
@@ -77,6 +86,10 @@ class WallpaperRequestHandler @Inject constructor(
             result(Kind.CHANGE, outcome, request.screen)
         }
     }
+
+    /** Why an automatic change can't happen now: changing is paused, or a battery condition (plan 6.1). */
+    private fun automaticSkipReason(settings: ScheduleSettings): String? =
+        if (!settings.enableChanger) "changing is paused" else conditions.automaticChangeBlock(settings)?.name
 
     private fun result(kind: Kind, outcome: WallpaperChangeOutcome, screen: ScreenType) = WallpaperChangeResult(
         kind,

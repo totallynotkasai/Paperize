@@ -10,9 +10,11 @@ import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.service.WallpaperChangeLock
 import com.anthonyla.paperize.service.WallpaperNotifier
+import com.anthonyla.paperize.service.schedule.ChangeConditions
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import com.anthonyla.paperize.service.wallpaper.WallpaperController
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeOutcome
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.withLock
 
@@ -24,7 +26,8 @@ class WallpaperChangeWorker @AssistedInject constructor(
     private val settingsRepository: SettingsRepository,
     private val wallpaperChangeLock: WallpaperChangeLock,
     private val wallpaperScheduler: WallpaperScheduler,
-    private val notifier: WallpaperNotifier
+    private val notifier: WallpaperNotifier,
+    private val conditions: ChangeConditions
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -35,10 +38,15 @@ class WallpaperChangeWorker @AssistedInject constructor(
             Log.d(TAG, "Starting wallpaper change for $screenType")
             val outcome = wallpaperChangeLock.mutex.withLock {
                 val settings = settingsRepository.getScheduleSettings()
-                if (screenType in scheduledScreens(settings, settingsRepository.getWallpaperMode())) {
-                    wallpaperController.change(screenType, settings)
-                } else {
-                    null
+                val block = conditions.automaticChangeBlock(settings)
+                when {
+                    screenType !in scheduledScreens(settings, settingsRepository.getWallpaperMode()) -> null
+                    // Battery saver is checked here; "Only while charging" is also a job constraint (plan 6.1).
+                    block != null -> {
+                        Log.d(TAG, "Skipping this change for $screenType: $block")
+                        WallpaperChangeOutcome()
+                    }
+                    else -> wallpaperController.change(screenType, settings)
                 }
             }
             when {
@@ -52,7 +60,8 @@ class WallpaperChangeWorker @AssistedInject constructor(
                     notifier.showEmptyAlbum()
                     cancelUnscheduledWork()
                 }
-                else -> Log.d(TAG, "Wallpaper change completed successfully for $screenType")
+                outcome.changed -> Log.d(TAG, "Wallpaper change completed successfully for $screenType")
+                else -> Unit
             }
             Result.success()
         } catch (e: CancellationException) {

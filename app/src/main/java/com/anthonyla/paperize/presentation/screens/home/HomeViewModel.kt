@@ -15,6 +15,7 @@ import com.anthonyla.paperize.domain.usecase.CreateAlbumUseCase
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeEvents
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
+import com.anthonyla.paperize.service.schedule.ScheduleEvents
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,7 +46,8 @@ class HomeViewModel @Inject constructor(
     private val wallpaperScheduler: WallpaperScheduler,
     private val wallpaperRepository: com.anthonyla.paperize.domain.repository.WallpaperRepository,
     private val changeRequests: WallpaperChangeRequests,
-    changeEvents: WallpaperChangeEvents
+    changeEvents: WallpaperChangeEvents,
+    private val scheduleEvents: ScheduleEvents
 ) : ViewModel() {
 
     companion object {
@@ -172,6 +174,8 @@ class HomeViewModel @Inject constructor(
         launchSettingsUpdate {
             val before = settingsRepository.getScheduleSettings()
             updateSelection(album?.id)
+            // A screen with a night album may start rotating, so put the right album in use first.
+            scheduleEvents.syncNightAlbums()
             val mode = settingsRepository.getWallpaperMode()
             var updated = settingsRepository.getScheduleSettings()
             if (album == null && updated.activeScreens(mode).isEmpty()) {
@@ -193,6 +197,7 @@ class HomeViewModel @Inject constructor(
     fun toggleWallpaperChanger(enabled: Boolean) {
         launchSettingsUpdate {
             settingsRepository.updateEnableChanger(enabled)
+            scheduleEvents.syncNightAlbums()
             val updated = settingsRepository.getScheduleSettings()
             val mode = settingsRepository.getWallpaperMode()
             // New jobs count a full interval from now, so the first change happens here instead.
@@ -217,7 +222,7 @@ class HomeViewModel @Inject constructor(
     fun updateScheduleSettings(settings: ScheduleSettings, deferRender: Boolean = false) {
         launchSettingsUpdate {
             lateinit var currentSettings: ScheduleSettings
-            val validated = settingsRepository.updateScheduleSettings { current ->
+            var validated = settingsRepository.updateScheduleSettings { current ->
                 currentSettings = current
                 // Album selection and pause/resume have their own actions. An edit made from an
                 // older draft must not overwrite changes those actions made since. Turning a
@@ -226,8 +231,16 @@ class HomeViewModel @Inject constructor(
                     enableChanger = current.enableChanger,
                     homeAlbumId = current.homeAlbumId,
                     lockAlbumId = current.lockAlbumId,
-                    liveAlbumId = current.liveAlbumId
+                    liveAlbumId = current.liveAlbumId,
+                    homeNightAlbumId = current.homeNightAlbumId,
+                    lockNightAlbumId = current.lockNightAlbumId,
+                    liveNightAlbumId = current.liveNightAlbumId,
+                    nightActive = current.nightActive
                 ).validate()
+            }
+            // New night hours, trigger or screens may put the other albums in use now (plan 6.4).
+            if (validated.hasSchedulingChanges(currentSettings) && scheduleEvents.syncNightAlbums()) {
+                validated = settingsRepository.getScheduleSettings()
             }
             if (currentSettings.shuffleEnabled != validated.shuffleEnabled) {
                 wallpaperRepository.clearAllQueues()
@@ -246,13 +259,17 @@ class HomeViewModel @Inject constructor(
             } else emptySet()
             changeStaticScreensNow(newlyRotating)
 
+            // Screens that switched between their day and night albums change now, like picking an album.
+            val switched = if (validated.enableChanger) switchedScreens(currentSettings, validated) else emptySet()
+            changeStaticScreensNow(switched, keepSchedule = false)
+
             // Effects apply while paused too; the screens changed above already use them. A screen
             // whose album has its own effects doesn't show the screen's effects, so editing those
             // doesn't set its wallpaper again.
             val toRender = validated.rotatingStaticScreens().filter { screen ->
                 val ownEffects = validated.albumFor(screen)?.let { albumRepository.getAlbumEffects(it) } != null
                 validated.hasDisplayChanges(currentSettings, screen, albumHasOwnEffects = ownEffects)
-            } - newlyRotating
+            } - newlyRotating - switched
             if (deferRender) {
                 deferRender(toRender)
             } else {
@@ -291,12 +308,38 @@ class HomeViewModel @Inject constructor(
 
     override fun onCleared() = flushPendingRender()
 
-    /** Change [screens] now; both static screens go in one request, which changes Home first. */
-    private fun changeStaticScreensNow(screens: Set<ScreenType>) {
+    /**
+     * Change [screens] now; both static screens go in one request, which changes Home first.
+     * [keepSchedule] leaves the countdown alone (a newly rotating screen's job just started one).
+     */
+    private fun changeStaticScreensNow(screens: Set<ScreenType>, keepSchedule: Boolean = true) {
         when (screens.size) {
             0 -> Unit
-            1 -> changeWallpaperNow(screens.single(), keepSchedule = true)
-            else -> changeWallpaperNow(ScreenType.BOTH, keepSchedule = true)
+            1 -> changeWallpaperNow(screens.single(), keepSchedule)
+            else -> changeWallpaperNow(ScreenType.BOTH, keepSchedule)
+        }
+    }
+
+    /** Static screens that rotated before and after but now use another album: day and night switched. */
+    private fun switchedScreens(before: ScheduleSettings, after: ScheduleSettings): Set<ScreenType> =
+        (after.rotatingStaticScreens() intersect before.rotatingStaticScreens())
+            .filterTo(mutableSetOf()) { after.albumFor(it) != before.albumFor(it) }
+
+    /**
+     * A night album for [screen] (plan 6.4), or null for none. If it is in use now (it is night), the
+     * screen changes to it at once, like picking an album; the live wallpaper follows by itself.
+     */
+    fun selectNightAlbum(screen: ScreenType, album: AlbumSummary?) {
+        launchSettingsUpdate {
+            val before = settingsRepository.getScheduleSettings()
+            settingsRepository.updateNightAlbumId(screen, album?.id)
+            scheduleEvents.syncNightAlbums()
+            val updated = settingsRepository.getScheduleSettings()
+            val mode = settingsRepository.getWallpaperMode()
+            wallpaperScheduler.updateSchedules(updated, mode)
+            if (mode == WallpaperMode.STATIC && updated.enableChanger) {
+                changeStaticScreensNow(switchedScreens(before, updated), keepSchedule = false)
+            }
         }
     }
 

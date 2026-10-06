@@ -11,6 +11,7 @@ import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.usecase.ChangeWallpaperUseCase
 import com.anthonyla.paperize.domain.usecase.ReapplyEffectsUseCase
+import com.anthonyla.paperize.service.schedule.ScheduleState
 import io.mockk.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -24,7 +25,7 @@ class WallpaperControllerTest {
     private val prepare = mockk<ChangeWallpaperUseCase>(relaxed = true)
     private val render = mockk<ReapplyEffectsUseCase>()
     private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
-    private val controller = WallpaperController(mockk<Context>(), manager, prepare, render, settingsRepository)
+    private val controller = WallpaperController(mockk<Context>(), manager, prepare, render, settingsRepository, mockk<ScheduleState>(relaxed = true))
     private val settings = ScheduleSettings(homeEnabled = true, lockEnabled = true, homeAlbumId = "album", lockAlbumId = "album")
     private val bitmap = mockk<Bitmap>(relaxed = true)
     private val prepared = PreparedWallpaper(bitmap, "album", ScreenType.HOME, "image", false)

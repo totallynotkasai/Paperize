@@ -42,6 +42,7 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToAlbum: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onNavigateToScheduling: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val albums by viewModel.albums.collectAsStateWithLifecycle()
@@ -129,7 +130,8 @@ fun HomeScreen(
                                     lockWallpaperUri = currentLockWallpaperUri,
                                     liveWallpaperUri = currentLiveWallpaperUri,
                                     liveWallpaperNotSet = liveWallpaperNotSet,
-                                    changeInProgress = changeInProgress
+                                    changeInProgress = changeInProgress,
+                                    onOpenSchedulingOptions = onNavigateToScheduling
                                 )
                             }
                         }

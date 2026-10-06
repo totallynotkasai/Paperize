@@ -13,6 +13,7 @@ import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.usecase.ChangeWallpaperUseCase
 import com.anthonyla.paperize.domain.usecase.ReapplyEffectsUseCase
+import com.anthonyla.paperize.service.schedule.ScheduleState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
@@ -28,7 +29,8 @@ class WallpaperController @Inject constructor(
     private val wallpaperManager: WallpaperManager,
     private val prepare: ChangeWallpaperUseCase,
     private val render: ReapplyEffectsUseCase,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val scheduleState: ScheduleState
 ) {
     /**
      * Move [screen] on to its next image. BOTH changes each turned-on static screen from its own
@@ -71,6 +73,7 @@ class WallpaperController @Inject constructor(
             // Once Android accepts the bitmap, cancellation must not leave our current item stale.
             withContext(NonCancellable) {
                 screen.staticScreens().forEach { prepare.complete(prepared, it) }
+                scheduleState.recordChanged(screen.staticScreens())
             }
         } catch (e: Exception) {
             if (!accepted) withContext(NonCancellable) { prepare.restore(prepared) }
@@ -91,6 +94,7 @@ class WallpaperController @Inject constructor(
                 target.staticScreens().forEach {
                     prepare.completeSpecific(albumId, it, wallpaperId, settings.shuffleEnabled)
                 }
+                scheduleState.recordChanged(target.staticScreens())
             }
         }
     }

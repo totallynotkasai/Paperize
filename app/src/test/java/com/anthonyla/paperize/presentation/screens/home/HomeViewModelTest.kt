@@ -15,6 +15,7 @@ import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeEvents
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
+import com.anthonyla.paperize.service.schedule.ScheduleEvents
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,7 @@ class HomeViewModelTest {
     private val wallpapers = mockk<WallpaperRepository>(relaxed = true)
     private val scheduler = mockk<WallpaperScheduler>(relaxed = true)
     private val requests = mockk<WallpaperChangeRequests>(relaxed = true)
+    private val scheduleEvents = mockk<ScheduleEvents>(relaxed = true)
     private val stored = MutableStateFlow(ScheduleSettings(homeEnabled = true, homeAlbumId = "old"))
     private val store = ViewModelStore()
     private lateinit var viewModel: HomeViewModel
@@ -58,7 +60,7 @@ class HomeViewModelTest {
             stored.value
         }
         every { wallpapers.getCurrentWallpaperFlow(any(), any()) } returns flowOf(null)
-        viewModel = HomeViewModel(mockk<Context>(), albums, mockk(), settings, scheduler, wallpapers, requests, WallpaperChangeEvents())
+        viewModel = HomeViewModel(mockk<Context>(), albums, mockk(), settings, scheduler, wallpapers, requests, WallpaperChangeEvents(), scheduleEvents)
         store.put("home", viewModel)
     }
 
@@ -236,7 +238,7 @@ class HomeViewModelTest {
 
     @Test fun `change now is busy until its result arrives`() = runTest {
         val events = WallpaperChangeEvents()
-        val busyViewModel = HomeViewModel(mockk<Context>(), albums, mockk(), settings, scheduler, wallpapers, requests, events)
+        val busyViewModel = HomeViewModel(mockk<Context>(), albums, mockk(), settings, scheduler, wallpapers, requests, events, scheduleEvents)
         store.put("busy", busyViewModel)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { busyViewModel.changeInProgress.collect() }
         assertFalse(busyViewModel.changeInProgress.value)
@@ -246,5 +248,65 @@ class HomeViewModelTest {
         events.end()
         runCurrent()
         assertFalse(busyViewModel.changeInProgress.value)
+    }
+
+    /** The night albums come into use when [syncNightAlbums][ScheduleEvents.syncNightAlbums] runs while [night]. */
+    private fun nightIs(night: () -> Boolean) {
+        coEvery { scheduleEvents.syncNightAlbums(any()) } answers {
+            val changed = stored.value.nightActive != night()
+            stored.value = stored.value.copy(nightActive = night())
+            changed
+        }
+        coEvery { settings.updateNightAlbumId(any(), any()) } answers {
+            stored.value = when (firstArg<ScreenType>()) {
+                ScreenType.HOME -> stored.value.copy(homeNightAlbumId = secondArg())
+                ScreenType.LOCK -> stored.value.copy(lockNightAlbumId = secondArg())
+                else -> stored.value.copy(liveNightAlbumId = secondArg())
+            }
+        }
+    }
+
+    @Test fun `picking a night album at night changes that screen to it at once`() = runTest {
+        nightIs { true }
+        stored.value = stored.value.copy(enableChanger = true, lockEnabled = true, lockAlbumId = "lock")
+        viewModel.selectNightAlbum(ScreenType.HOME, emptyAlbumSummary("night"))
+        advanceUntilIdle()
+        assertEquals("night", stored.value.albumFor(ScreenType.HOME))
+        verify(exactly = 1) { requests.change(ScreenType.HOME, keepSchedule = false) }
+        verify(exactly = 0) { requests.change(ScreenType.LOCK, any()) }
+        coVerify { scheduler.updateSchedules(match { it.homeNightAlbumId == "night" }, WallpaperMode.STATIC, false) }
+    }
+
+    @Test fun `picking a night album by day changes nothing yet`() = runTest {
+        nightIs { false }
+        stored.value = stored.value.copy(enableChanger = true)
+        viewModel.selectNightAlbum(ScreenType.HOME, emptyAlbumSummary("night"))
+        advanceUntilIdle()
+        assertEquals("night", stored.value.homeNightAlbumId)
+        verify(exactly = 0) { requests.change(any(), any()) }
+    }
+
+    @Test fun `new night hours that start the night change the screens with a night album`() = runTest {
+        var night = false
+        nightIs { night }
+        stored.value = stored.value.copy(enableChanger = true, homeNightAlbumId = "night")
+        night = true
+        viewModel.updateScheduleSettings(stored.value.copy(nightStartMinutes = 6 * 60))
+        advanceUntilIdle()
+        assertTrue(stored.value.nightActive)
+        verify(exactly = 1) { requests.change(ScreenType.HOME, keepSchedule = false) }
+        // Changing the screen already draws it with the current effects; no separate re-render.
+        verify(exactly = 0) { requests.reapplyEffects(any()) }
+    }
+
+    @Test fun `edits from an older draft keep the night albums and which ones are in use`() = runTest {
+        nightIs { true }
+        val draft = stored.value
+        stored.value = stored.value.copy(homeNightAlbumId = "night", nightActive = true)
+        viewModel.updateScheduleSettings(draft.copy(onlyWhileCharging = true))
+        advanceUntilIdle()
+        assertEquals("night", stored.value.homeNightAlbumId)
+        assertTrue(stored.value.nightActive)
+        assertTrue(stored.value.onlyWhileCharging)
     }
 }

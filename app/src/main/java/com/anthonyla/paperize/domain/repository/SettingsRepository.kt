@@ -37,6 +37,12 @@ interface SettingsRepository {
 
     suspend fun updateLiveAlbumId(albumId: String?)
 
+    /** A night album for [screen] (plan 6.4); null removes it. */
+    suspend fun updateNightAlbumId(screen: ScreenType, albumId: String?)
+
+    /** Switch between the day and night albums; returns whether the stored value changed. */
+    suspend fun updateNightActive(active: Boolean): Boolean
+
     /** Clears matching selections atomically; returns whether any selection changed. */
     suspend fun clearAlbumSelectionsIfMatches(albumId: String): Boolean
 

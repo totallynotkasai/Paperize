@@ -7,6 +7,8 @@ import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.model.Wallpaper
 import com.anthonyla.paperize.domain.repository.AlbumRepository
+import com.anthonyla.paperize.service.schedule.ScheduleState
+import com.anthonyla.paperize.service.schedule.staticScreens
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -14,7 +16,8 @@ import javax.inject.Inject
 
 class WallpaperRenderer @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val albumRepository: AlbumRepository
+    private val albumRepository: AlbumRepository,
+    private val scheduleState: ScheduleState
 ) {
     /** An album with its own effects uses them on every screen it is shown on (plan 5.3). */
     suspend fun render(wallpaper: Wallpaper, screen: ScreenType, settings: ScheduleSettings): Bitmap? {
@@ -47,6 +50,8 @@ class WallpaperRenderer @Inject constructor(
                 val adjusted = adaptiveBrightnessAdjustment(context, bitmap)
                 if (adjusted !== bitmap) bitmap.recycle()
                 bitmap = adjusted
+                // So a later switch of the dark theme knows this screen needs drawing again (plan 6.3).
+                scheduleState.recordRendered(screen.staticScreens(), isSystemDarkTheme(context))
             }
             currentCoroutineContext().ensureActive()
             return bitmap

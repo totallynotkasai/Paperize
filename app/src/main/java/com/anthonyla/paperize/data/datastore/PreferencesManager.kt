@@ -2,12 +2,15 @@ package com.anthonyla.paperize.data.datastore
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.anthonyla.paperize.core.NightTrigger
+import com.anthonyla.paperize.core.ScheduleType
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.ScalingType
 import com.anthonyla.paperize.core.WallpaperMode
@@ -16,6 +19,7 @@ import com.anthonyla.paperize.core.constants.PreferenceKeys
 import com.anthonyla.paperize.domain.model.AppSettings
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.model.WallpaperEffects
+import com.anthonyla.paperize.domain.model.validChangeTimes
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -25,6 +29,10 @@ import javax.inject.Singleton
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
     name = Constants.PREFERENCES_NAME
 )
+
+/** "420,1140" → [420, 1140]; anything unreadable is dropped. */
+internal fun parseChangeTimes(stored: String): List<Int> =
+    validChangeTimes(stored.split(',').mapNotNull { it.trim().toIntOrNull() })
 
 @Singleton
 class PreferencesManager @Inject constructor(
@@ -123,7 +131,29 @@ class PreferencesManager @Inject constructor(
             autoPanSweepSeconds = prefs[intPreferencesKey(PreferenceKeys.LIVE_AUTO_PAN_SWEEP_SECONDS)]
                 ?: Constants.DEFAULT_AUTO_PAN_SWEEP_SECONDS
         ),
-        adaptiveBrightness = prefs[booleanPreferencesKey(PreferenceKeys.ADAPTIVE_BRIGHTNESS)] ?: false
+        adaptiveBrightness = prefs[booleanPreferencesKey(PreferenceKeys.ADAPTIVE_BRIGHTNESS)] ?: false,
+        onlyWhileCharging = prefs[booleanPreferencesKey(PreferenceKeys.ONLY_WHILE_CHARGING)] ?: false,
+        pauseInBatterySaver = prefs[booleanPreferencesKey(PreferenceKeys.PAUSE_IN_BATTERY_SAVER)] ?: false,
+        changeOnScreenOff = prefs[booleanPreferencesKey(PreferenceKeys.CHANGE_ON_SCREEN_OFF)] ?: false,
+        screenOffTarget = prefs[stringPreferencesKey(PreferenceKeys.SCREEN_OFF_TARGET)]
+            ?.let(ScreenType::fromString) ?: ScreenType.BOTH,
+        changeOnUnlock = prefs[booleanPreferencesKey(PreferenceKeys.CHANGE_ON_UNLOCK)] ?: false,
+        unlockTarget = prefs[stringPreferencesKey(PreferenceKeys.UNLOCK_TARGET)]
+            ?.let(ScreenType::fromString) ?: ScreenType.HOME,
+        triggerGapMinutes = prefs[intPreferencesKey(PreferenceKeys.TRIGGER_GAP_MINUTES)]
+            ?: Constants.DEFAULT_TRIGGER_GAP_MINUTES,
+        scheduleType = ScheduleType.fromString(prefs[stringPreferencesKey(PreferenceKeys.SCHEDULE_TYPE)]),
+        changeTimes = prefs[stringPreferencesKey(PreferenceKeys.CHANGE_TIMES)]
+            ?.let(::parseChangeTimes) ?: Constants.DEFAULT_CHANGE_TIMES,
+        homeNightAlbumId = prefs[stringPreferencesKey(PreferenceKeys.HOME_NIGHT_ALBUM_ID)],
+        lockNightAlbumId = prefs[stringPreferencesKey(PreferenceKeys.LOCK_NIGHT_ALBUM_ID)],
+        liveNightAlbumId = prefs[stringPreferencesKey(PreferenceKeys.LIVE_NIGHT_ALBUM_ID)],
+        nightTrigger = NightTrigger.fromString(prefs[stringPreferencesKey(PreferenceKeys.NIGHT_TRIGGER)]),
+        nightStartMinutes = prefs[intPreferencesKey(PreferenceKeys.NIGHT_START_MINUTES)]
+            ?: Constants.DEFAULT_NIGHT_START_MINUTES,
+        dayStartMinutes = prefs[intPreferencesKey(PreferenceKeys.DAY_START_MINUTES)]
+            ?: Constants.DEFAULT_DAY_START_MINUTES,
+        nightActive = prefs[booleanPreferencesKey(PreferenceKeys.NIGHT_ACTIVE)] ?: false
     )
 
     suspend fun updateScheduleSettings(settings: ScheduleSettings) {
@@ -201,8 +231,51 @@ class PreferencesManager @Inject constructor(
             prefs[intPreferencesKey(PreferenceKeys.LIVE_AUTO_PAN_SWEEP_SECONDS)] = settings.liveEffects.autoPanSweepSeconds
 
             prefs[booleanPreferencesKey(PreferenceKeys.ADAPTIVE_BRIGHTNESS)] = settings.adaptiveBrightness
+
+            prefs[booleanPreferencesKey(PreferenceKeys.ONLY_WHILE_CHARGING)] = settings.onlyWhileCharging
+            prefs[booleanPreferencesKey(PreferenceKeys.PAUSE_IN_BATTERY_SAVER)] = settings.pauseInBatterySaver
+            prefs[booleanPreferencesKey(PreferenceKeys.CHANGE_ON_SCREEN_OFF)] = settings.changeOnScreenOff
+            prefs[stringPreferencesKey(PreferenceKeys.SCREEN_OFF_TARGET)] = settings.screenOffTarget.name
+            prefs[booleanPreferencesKey(PreferenceKeys.CHANGE_ON_UNLOCK)] = settings.changeOnUnlock
+            prefs[stringPreferencesKey(PreferenceKeys.UNLOCK_TARGET)] = settings.unlockTarget.name
+            prefs[intPreferencesKey(PreferenceKeys.TRIGGER_GAP_MINUTES)] = settings.triggerGapMinutes
+            prefs[stringPreferencesKey(PreferenceKeys.SCHEDULE_TYPE)] = settings.scheduleType.name
+            prefs[stringPreferencesKey(PreferenceKeys.CHANGE_TIMES)] = settings.changeTimes.joinToString(",")
+            prefs.putOrRemove(PreferenceKeys.HOME_NIGHT_ALBUM_ID, settings.homeNightAlbumId)
+            prefs.putOrRemove(PreferenceKeys.LOCK_NIGHT_ALBUM_ID, settings.lockNightAlbumId)
+            prefs.putOrRemove(PreferenceKeys.LIVE_NIGHT_ALBUM_ID, settings.liveNightAlbumId)
+            prefs[stringPreferencesKey(PreferenceKeys.NIGHT_TRIGGER)] = settings.nightTrigger.name
+            prefs[intPreferencesKey(PreferenceKeys.NIGHT_START_MINUTES)] = settings.nightStartMinutes
+            prefs[intPreferencesKey(PreferenceKeys.DAY_START_MINUTES)] = settings.dayStartMinutes
+            prefs[booleanPreferencesKey(PreferenceKeys.NIGHT_ACTIVE)] = settings.nightActive
         }
         return scheduleSettings(updated)
+    }
+
+    private fun MutablePreferences.putOrRemove(key: String, value: String?) {
+        if (value != null) this[stringPreferencesKey(key)] = value else remove(stringPreferencesKey(key))
+    }
+
+    /** A night album for [screen] (plan 6.4); null removes it. */
+    suspend fun updateNightAlbumId(screen: ScreenType, albumId: String?) {
+        val key = when (screen) {
+            ScreenType.HOME -> PreferenceKeys.HOME_NIGHT_ALBUM_ID
+            ScreenType.LOCK -> PreferenceKeys.LOCK_NIGHT_ALBUM_ID
+            ScreenType.LIVE -> PreferenceKeys.LIVE_NIGHT_ALBUM_ID
+            ScreenType.BOTH -> return
+        }
+        dataStore.edit { prefs -> prefs.putOrRemove(key, albumId) }
+    }
+
+    /** Switch between the day and night albums; returns whether the stored value changed. */
+    suspend fun updateNightActive(active: Boolean): Boolean {
+        var changed = false
+        dataStore.edit { prefs ->
+            val key = booleanPreferencesKey(PreferenceKeys.NIGHT_ACTIVE)
+            changed = (prefs[key] ?: false) != active
+            if (changed) prefs[key] = active
+        }
+        return changed
     }
 
     suspend fun updateHomeAlbumId(albumId: String?) {
@@ -238,8 +311,10 @@ class PreferencesManager @Inject constructor(
     suspend fun clearAlbumSelectionsIfMatches(albumId: String): Boolean {
         var wasCleared = false
         dataStore.edit { prefs ->
-            val targets = listOf(PreferenceKeys.HOME_ALBUM_ID, PreferenceKeys.LOCK_ALBUM_ID, PreferenceKeys.LIVE_ALBUM_ID)
-                .map(::stringPreferencesKey).filter { prefs[it] == albumId }
+            val targets = listOf(
+                PreferenceKeys.HOME_ALBUM_ID, PreferenceKeys.LOCK_ALBUM_ID, PreferenceKeys.LIVE_ALBUM_ID,
+                PreferenceKeys.HOME_NIGHT_ALBUM_ID, PreferenceKeys.LOCK_NIGHT_ALBUM_ID, PreferenceKeys.LIVE_NIGHT_ALBUM_ID
+            ).map(::stringPreferencesKey).filter { prefs[it] == albumId }
             targets.forEach { prefs.remove(it) }
             wasCleared = targets.isNotEmpty()
         }
@@ -248,11 +323,15 @@ class PreferencesManager @Inject constructor(
 
     suspend fun clearEmptyAlbumSelection(albumId: String, screen: ScreenType) {
         dataStore.edit { prefs ->
+            // The empty album may be the screen's night album (plan 6.4).
             val targets = when (screen) {
-                ScreenType.HOME -> listOf(PreferenceKeys.HOME_ALBUM_ID)
-                ScreenType.LOCK -> listOf(PreferenceKeys.LOCK_ALBUM_ID)
-                ScreenType.BOTH -> listOf(PreferenceKeys.HOME_ALBUM_ID, PreferenceKeys.LOCK_ALBUM_ID)
-                ScreenType.LIVE -> listOf(PreferenceKeys.LIVE_ALBUM_ID)
+                ScreenType.HOME -> listOf(PreferenceKeys.HOME_ALBUM_ID, PreferenceKeys.HOME_NIGHT_ALBUM_ID)
+                ScreenType.LOCK -> listOf(PreferenceKeys.LOCK_ALBUM_ID, PreferenceKeys.LOCK_NIGHT_ALBUM_ID)
+                ScreenType.BOTH -> listOf(
+                    PreferenceKeys.HOME_ALBUM_ID, PreferenceKeys.LOCK_ALBUM_ID,
+                    PreferenceKeys.HOME_NIGHT_ALBUM_ID, PreferenceKeys.LOCK_NIGHT_ALBUM_ID
+                )
+                ScreenType.LIVE -> listOf(PreferenceKeys.LIVE_ALBUM_ID, PreferenceKeys.LIVE_NIGHT_ALBUM_ID)
             }.map(::stringPreferencesKey).filter { prefs[it] == albumId }
             if (targets.isEmpty()) return@edit
             targets.forEach { prefs.remove(it) }

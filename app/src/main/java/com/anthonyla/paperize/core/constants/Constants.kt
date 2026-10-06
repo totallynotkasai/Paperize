@@ -11,7 +11,10 @@ object Constants {
     // Notifications
     const val NOTIFICATION_CHANNEL_ID = "paperize_channel"  // silent "changing wallpaper" notices
     const val ALERT_CHANNEL_ID = "paperize_alerts"  // problems; audible by default
+    /** The screen-off/unlock listener's required notice; minimum importance, so it stays out of sight. */
+    const val LISTENER_CHANNEL_ID = "paperize_listener"
     const val NOTIFICATION_ID = 1
+    const val LISTENER_NOTIFICATION_ID = 3  // 2 is WallpaperNotifier's problem notice
 
     // Services
     const val ACTION_CHANGE_WALLPAPER = "com.anthonyla.paperize.ACTION_CHANGE_WALLPAPER"
@@ -31,6 +34,11 @@ object Constants {
     const val WORK_TAG_BOTH = "wallpaper_change_both_tag"
     const val WORK_TAG_LIVE = "wallpaper_change_live_tag"
     const val WORK_TAG_REFRESH = "album_refresh_tag"
+    const val WORK_NAME_TIMED_CHANGE = "timed_change"
+    const val WORK_NAME_DARK_MODE_CHECK = "dark_mode_check"
+    const val WORK_TAG_SCHEDULE_EVENTS = "schedule_events_tag"
+    /** WorkManager keeps its JobScheduler job IDs at or below this; Paperize's own jobs sit above it. */
+    const val MAX_WORK_MANAGER_JOB_ID = 1_000_000
     const val MAX_WORK_RETRY_ATTEMPTS = 3
 
     // Intents
@@ -56,6 +64,26 @@ object Constants {
     const val DEFAULT_INTERVAL_MINUTES = 60
     /** Opening the app rescans folders at most this often; the daily 3 AM refresh always runs. */
     const val FOREGROUND_REFRESH_MIN_INTERVAL_MS = 4 * 60 * 60 * 1000L
+
+    // Smarter scheduling (fork plan, Phase 6)
+    /** Screen-off and unlock changes: the minimum-gap choices, in minutes (0 = every time). */
+    val TRIGGER_GAP_STEPS_MINUTES = listOf(0, 5, 15, 60, 180)
+    const val DEFAULT_TRIGGER_GAP_MINUTES = 15
+    const val MAX_TRIGGER_GAP_MINUTES = 180
+    /** How long a screen-off or unlock change may keep the CPU awake. */
+    const val TRIGGER_WAKE_LOCK_TIMEOUT_MS = 2 * 60 * 1000L
+    /** Set times, as minutes after midnight: 07:00 and 19:00. */
+    val DEFAULT_CHANGE_TIMES = listOf(7 * 60, 19 * 60)
+    const val MAX_CHANGE_TIMES = 12
+    const val DEFAULT_NIGHT_START_MINUTES = 19 * 60
+    const val DEFAULT_DAY_START_MINUTES = 7 * 60
+    /**
+     * Set times and the day/night switch use inexact alarms, which need no special permission.
+     * Android 12+ allows no window shorter than 10 minutes.
+     */
+    const val TIMED_ALARM_WINDOW_MS = 10 * 60 * 1000L
+    /** Catches dark-theme switches made by a schedule, which change no setting Paperize can watch. */
+    const val DARK_MODE_CHECK_INTERVAL_MINUTES = 15L
 
     // UI
     const val ANIMATION_DURATION_LONG_MS = 800  // For item reordering animations
@@ -196,6 +224,24 @@ object PreferenceKeys {
 
     // Behavior
     const val ADAPTIVE_BRIGHTNESS = "adaptive_brightness"
+
+    // Smarter scheduling (fork plan, Phase 6)
+    const val ONLY_WHILE_CHARGING = "only_while_charging"
+    const val PAUSE_IN_BATTERY_SAVER = "pause_in_battery_saver"
+    const val CHANGE_ON_SCREEN_OFF = "change_on_screen_off"
+    const val SCREEN_OFF_TARGET = "screen_off_target"
+    const val CHANGE_ON_UNLOCK = "change_on_unlock"
+    const val UNLOCK_TARGET = "unlock_target"
+    const val TRIGGER_GAP_MINUTES = "trigger_gap_minutes"
+    const val SCHEDULE_TYPE = "schedule_type"
+    const val CHANGE_TIMES = "change_times"  // comma-separated minutes after midnight
+    const val HOME_NIGHT_ALBUM_ID = "home_night_album_id"
+    const val LOCK_NIGHT_ALBUM_ID = "lock_night_album_id"
+    const val LIVE_NIGHT_ALBUM_ID = "live_night_album_id"
+    const val NIGHT_TRIGGER = "night_trigger"
+    const val NIGHT_START_MINUTES = "night_start_minutes"
+    const val DAY_START_MINUTES = "day_start_minutes"
+    const val NIGHT_ACTIVE = "night_active"
 
     // First launch
     const val FIRST_LAUNCH = "first_launch"

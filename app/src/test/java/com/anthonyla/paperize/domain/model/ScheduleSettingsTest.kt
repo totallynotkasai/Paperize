@@ -115,11 +115,16 @@ class ScheduleSettingsTest {
             current.copy(homeScrollingEnabled = true),
             current.copy(homeEffects = effects),
             current.copy(lockEffects = effects),
-            current.copy(liveEffects = effects),
-            current.copy(adaptiveBrightness = true)
+            current.copy(liveEffects = effects)
         ).forEach { edited ->
             assertTrue("Display: $edited", current.hasDisplayChanges(edited))
             assertFalse("Scheduling: $edited", current.hasSchedulingChanges(edited))
+        }
+        // Adaptive brightness also starts or stops the dark-theme checks (plan 6.3); updating the
+        // schedules keeps every existing countdown.
+        current.copy(adaptiveBrightness = true).let { edited ->
+            assertTrue(current.hasDisplayChanges(edited))
+            assertTrue(current.hasSchedulingChanges(edited))
         }
         assertFalse(current.hasSchedulingChanges(current))
         assertFalse(current.hasDisplayChanges(current))
