@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Debug builds install next to the release app, so give them names that tell them apart. -->
 <resources>
-  <string name="app_name">Paperize Debug</string>
-  <string name="live_wallpaper_name">Paperize Debug Live Wallpaper</string>
+  <string name="app_name">Paperized Debug</string>
+  <string name="live_wallpaper_name">Paperized Debug Live Wallpaper</string>
 </resources>

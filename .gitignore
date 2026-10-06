@@ -18,3 +18,7 @@ local.properties
 /app/release
 .kotlin
 /.kotlin/sessions
+# Release signing (plan 7.3): the key and its passwords never go into git
+keystore.properties
+*.jks
+*.keystore

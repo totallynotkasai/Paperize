@@ -1,16 +1,19 @@
-## Unreleased (fork)
+## v4.2.0-fork.1 (Paperized)
 
-### Development setup
-- Debug builds install as "Paperize Debug" (`com.anthonyla.paperize.debug`) next to the release app, with their own live wallpaper name and a working "Change wallpaper" shortcut.
-- Room database schemas are tracked in git so migrations can be tested against them.
-- CI runs tests and lint on every pull request and push to `master`, and skips the signed build and release when signing secrets are not configured.
+The first release of this fork, based on Paperize 4.2.0.
+
+### Name and release
+- The app is now called Paperized, and its live wallpaper "Paperized Live Wallpaper", in English and Simplified Chinese.
+- Release builds keep Paperize's app ID, so Paperized replaces Paperize; because it is signed with a different key, Paperize has to be uninstalled first and albums created again.
+- Release builds are signed with your own key, named in a git-ignored `keystore.properties` (or, on CI, in environment variables). Without a key they build unsigned instead of failing.
+- The live wallpaper's "Change on screen off" now waits while changing is paused, like every other automatic change.
 
 ### Library and albums
 - The album screen has a Reorder action again, opening the drag-to-reorder screen. Albums and folders open in the new "Rotation order" view by default, which shows images in the order they change in.
 - New images keep their place: directly added images stay before folders, and new files found in a folder go to the end of that folder rather than the end of the album.
 - SVG images now work as static and live wallpapers. TIFF is no longer listed as supported, because Android can't decode it; imports skip files in unsupported formats and say how many were skipped.
 - Removing images, folders or albums gives back Android's file permissions that nothing else uses. Imports warn as the app nears Android's limit of 512 kept permissions and stop before it, suggesting a folder instead.
-- Images Paperize can no longer read are marked in the album, with a banner to grant access again or remove them. They are skipped in rotation, and an album whose images all lost access stays selected instead of being treated as empty.
+- Images Paperized can no longer read are marked in the album, with a banner to grant access again or remove them. They are skipped in rotation, and an album whose images all lost access stays selected instead of being treated as empty.
 - The database moves to version 5, adding everything later planned features need in one migration.
 
 ### Wallpaper reliability
@@ -27,7 +30,7 @@
 - Rotation progress survives new images: imports and folder refreshes add them to the current round instead of starting it again.
 - A folder's Refresh also removes files deleted from the folder. Background refreshes compare each folder with one scan of it instead of checking every image separately, and opening the app refreshes at most every 4 hours (the daily 3 AM refresh is unchanged).
 - Settings are no longer lost: slider changes are saved as soon as you let go (the wallpaper re-renders shortly after, or straight away when you leave the screen), and interval boxes keep what you type until you press Done or leave them.
-- In live mode, Paperize no longer clears your album when it isn't the live wallpaper on opening the app. A banner offers "Set live wallpaper" instead, and the check also looks at the lock screen on Android 14+. On Xiaomi phones it explains the "change wallpaper" permission HyperOS asks for.
+- In live mode, Paperized no longer clears your album when it isn't the live wallpaper on opening the app. A banner offers "Set live wallpaper" instead, and the check also looks at the lock screen on Android 14+. On Xiaomi phones it explains the "change wallpaper" permission HyperOS asks for.
 - Finishing onboarding no longer rebuilds the app's navigation.
 - Double-tapping the live wallpaper or changing it on screen-off restarts the background countdown, like the tile and shortcut.
 
@@ -47,9 +50,6 @@
 - Horizontal scrolling keeps at most three screens' width of a wide image, so very large panoramas no longer run out of memory.
 - Screen size detection ignores casting and other virtual displays on Android 12–16.
 - Wallpaper requests from the app, tile or shortcut that Android won't run in the foreground now run as a background job instead of crashing.
-
-### Development setup
-- Test fixtures shared by unit and device tests live in `app/src/sharedTest`; unused code and the JitPack repository were removed.
 
 ### Widgets
 - Three home-screen widgets: Shuffle Home, Shuffle Lock and Shuffle Both. Each is a one-cell button that can be widened to two cells to show its name, uses your wallpaper's Material You colours in light and dark, and has a preview in the widget picker.
@@ -75,10 +75,18 @@
 - A "Schedule" choice on the Wallpaper tab: change every interval as before, or at set times of day (for example 07:00 and 19:00). Set times use battery-friendly alarms that need no special permission, so a change can come up to about 10 minutes after its time, or when the phone is next used if it was left asleep. Times are added and edited with a clock or by typing.
 - "More Scheduling Options" opens a screen with the new options and the card says which are on.
 - Night albums: each screen (or the live wallpaper) can use a different album at night. Night either runs between two clock times or follows the phone's dark theme. At the switch, screens with a night album change to it, and the next change after that always comes from the album in use.
-- Static mode can also change when the screen turns off and/or when the phone is unlocked, choosing which screens each changes and a minimum gap, so a screen that changed recently is left alone. Android requires a notification while Paperize listens for these. It is silent, but Android may still show its icon in the status bar, so the options screen has a one-tap way to turn it off; the changes keep working without it.
+- Static mode can also change when the screen turns off and/or when the phone is unlocked, choosing which screens each changes and a minimum gap, so a screen that changed recently is left alone. Android requires a notification while Paperized listens for these. It is silent, but Android may still show its icon in the status bar, so the options screen has a one-tap way to turn it off; the changes keep working without it.
 - "Only change while charging" and "Pause in battery saver" hold back automatic changes (intervals, set times, the day/night switch, screen off and unlock, and the live wallpaper's short timer and screen-off change). Changing by hand with the button, tile, widgets, shortcut or double-tap always works. With "Only while charging", a change that falls due while unplugged happens once the phone is charging.
-- Static wallpapers with adaptive brightness are redrawn when the dark theme switches: within seconds when it is switched by hand, within 15 minutes when a schedule switches it, and at once while Paperize is open.
+- Static wallpapers with adaptive brightness are redrawn when the dark theme switches: within seconds when it is switched by hand, within 15 minutes when a schedule switches it, and at once while Paperized is open.
 - Set times and alarms are put back after a restart, an app update or a time-zone change, and a set time missed while the phone was off is caught up once.
+
+### Development and testing
+- Debug builds install as "Paperized Debug" (`com.anthonyla.paperize.debug`) next to the release app, with their own live wallpaper name and a working "Change wallpaper" shortcut.
+- Room database schemas are tracked in git so migrations can be tested against them, and CI fails if the build exports a schema that isn't committed.
+- CI runs tests and lint on every pull request and push to `master`, and skips the signed build and release when signing secrets are not configured. Signed release APKs are named `paperized-v….apk`.
+- New tests cover the change service's start handling, the scheduled change job, the background request and album refresh jobs, the live wallpaper engines' decisions (which engine leads, when its timer runs, what a settings change does), the widgets' taps and their real layouts on a device, and older data surviving the version 5 migration.
+- Test fixtures shared by unit and device tests live in `app/src/sharedTest`; unused code and the JitPack repository were removed.
+- The README describes the fork: features, installing, signing a release, and the tests.
 
 ## v4.2.0
 

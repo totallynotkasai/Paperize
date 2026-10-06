@@ -1,83 +1,81 @@
 <div align="center">
-  <img style="display: block" src="https://github.com/user-attachments/assets/e8fb14f5-ec8e-440e-a2ac-8065322b0e28" alt="">
-  <h1>Paperize</h1>
-  <p><strong>A dynamic wallpaper changer that keeps your device's aesthetic fresh and exciting</strong></p>
+  <h1>Paperized</h1>
+  <p><strong>A wallpaper changer for Android: static or live, on a schedule, from your own albums</strong></p>
 
-  [![GitHub Downloads](https://img.shields.io/github/downloads/Anthonyy232/Paperize/total?style=flat&logo=github&label=Downloads)](https://github.com/Anthonyy232/Paperize/releases)
-  [![GitHub Release](https://img.shields.io/github/v/release/Anthonyy232/Paperize?style=flat&logo=github)](https://github.com/Anthonyy232/Paperize/releases/latest)
-  [![License](https://img.shields.io/github/license/Anthonyy232/Paperize?style=flat)](LICENSE)
-  [![F-Droid](https://img.shields.io/f-droid/v/com.anthonyla.paperize?style=flat&logo=fdroid)](https://f-droid.org/en/packages/com.anthonyla.paperize/)
-  
-  [![Crowdin](https://badges.crowdin.net/paperize/localized.svg)](https://crowdin.com/project/paperize)
+  [![License](https://img.shields.io/github/license/totallynotkasai/Paperize?style=flat)](LICENSE)
 </div>
+
+---
+
+Paperized is a personal fork of [Paperize](https://github.com/Anthonyy232/Paperize) by Anthony La,
+based on Paperize 4.2.0. It fixes a number of bugs and adds features such as set times of day,
+night albums, favourites, home-screen widgets and live auto-pan. See the [CHANGELOG](CHANGELOG.md)
+for everything that changed.
+
+It is built for personal use and isn't published on any store. The source is here under the same
+GPL-3.0 licence as Paperize.
 
 ---
 
 ## Features
 
-- **Dynamic Wallpaper Changer** — Set your wallpaper to change at specific time intervals
-- **Static & Live Wallpapers** — Choose between traditional static wallpapers or smooth live wallpaper transitions
-- **Multiple Image Formats** — Supports JPG, PNG, WEBP, AVIF, HEIC/HEIF, BMP, GIF (first frame), and SVG
-- **Folder Support** — Organize wallpapers into folders for auto-updating
-- **Dual Screen Support** — Choose the same or separate albums for home and lock screen
-- **Wallpaper Effects** — Apply various effects including brightness, blur, scaling, vignette, and more
-- **On-Device Storage** — All wallpapers and settings stored locally on your device
+**Albums**
+- Albums of individually picked images and whole folders. Folders pick up new files and drop
+  deleted ones by themselves (daily, and when the app opens).
+- Images rotate in the order shown in the album ("Rotation order"), which you can rearrange, or
+  shuffled.
+- Mark images as favourites or exclude them from rotation, including images inside folders. Each
+  album chooses what its favourites do: a marker only, show them twice as often, or show only them.
+- Rename albums, and give an album its own effects that it keeps on every screen.
+- Images that Android no longer lets the app read are marked, with a way to grant access again.
+
+**Changing the wallpaper**
+- Static wallpapers on the home and lock screens, with the same or different albums. Screens that
+  share an album never show the same image.
+- A live wallpaper with smooth transitions, parallax, double-tap to change, changes on screen off,
+  intervals from one minute, and auto-pan for images that don't fit the screen.
+- Change at an interval or at set times of day, and switch to night albums by the clock or with
+  the phone's dark theme.
+- In static mode, also change when the screen turns off or the phone is unlocked.
+- Hold automatic changes until the phone is charging, or pause them in battery saver. Changing by
+  hand always works.
+- Change by hand from the app, a Quick Settings tile, a launcher shortcut, or the Shuffle Home,
+  Shuffle Lock and Shuffle Both widgets.
+
+**Effects**
+- Brightness, blur, vignette and grey filter for each screen, plus Fill, Fit, Stretch and None
+  scaling.
+- Adaptive brightness adjusts the wallpaper to the light or dark theme, and redraws it when the
+  theme switches.
+
+**Formats:** JPG, PNG, WEBP, AVIF, HEIC/HEIF, BMP, GIF (first frame) and SVG. TIFF isn't supported,
+because Android can't decode it; imports skip unsupported files and say how many.
+
+**Languages:** English and Simplified Chinese.
+
+All images stay where they are on your phone; Paperized only keeps Android's permission to read
+them, and stores albums and settings on the device. It has no network access.
 
 ---
 
-## Download
+## Installing
 
-[<img src="https://github.com/Anthonyy232/Paperize/assets/60626873/1c034414-21cd-4a0a-838d-89fe7bd56910" alt="Download from GitHub" height="60">](https://github.com/Anthonyy232/Paperize/releases)
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="60">](https://f-droid.org/en/packages/com.anthonyla.paperize/)
-[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it on IzzyOnDroid" height="60">](https://apt.izzysoft.de/fdroid/index/apk/com.anthonyla.paperize)
+There are no published downloads. Build the app as described below and install the APK with
+`adb install` or a file manager.
 
----
+| Build | App ID | Name on the phone |
+|-------|--------|-------------------|
+| Release | `com.anthonyla.paperize` | Paperized |
+| Debug | `com.anthonyla.paperize.debug` | Paperized Debug |
 
-## Localization
-
-Help translate Paperize into your language! Currently, most translations are provided using machine translation — contributions from native speakers are greatly appreciated.
-
-**[Contribute on Crowdin →](https://crowdin.com/project/paperize/invite?h=d8d7a7513d2beb0c96ba9b2a5f85473e2084922)**
-
----
-
-## Tech Stack
-
-| Category | Technology |
-|----------|------------|
-| **Language** | [Kotlin](https://kotlinlang.org/) |
-| **UI Framework** | [Jetpack Compose](https://developer.android.com/develop/ui/compose) |
-| **Design System** | [Material 3](https://m3.material.io/) |
-| **Dependency Injection** | [Dagger Hilt](https://dagger.dev/hilt/) |
-| **Database** | [Room](https://developer.android.com/training/data-storage/room) |
-| **Image Loading** | [Coil](https://coil-kt.github.io/coil/) |
-
-<details>
-<summary><b>View all dependencies</b></summary>
-
-- [Zoomable](https://github.com/usuiat/Zoomable) — Zoomable and pannable views
-
-</details>
+The release build keeps Paperize's app ID, so it replaces Paperize but can't install over it: it
+is signed with a different key. **Uninstall Paperize first, which deletes its albums and settings.**
+Android doesn't let one app read another's data and Paperize turns backups off, so albums have to
+be created again; your images themselves aren't touched. Debug builds install next to either.
 
 ---
 
-## Architecture
-
-- `AlbumRepository` owns library mutations. Imports, reordering, removal, covers,
-  and queue invalidation use Room transactions; provider scans run outside them.
-- `DocumentSource` isolates Android permissions and document-provider queries.
-  Import and refresh use cases consume metadata without accessing Android providers.
-- `WallpaperRepository` owns rotation queues and current-wallpaper records.
-  Queue creation checks and writes in one transaction, including synchronized screens.
-- `WallpaperController` shares static wallpaper application between the service
-  and worker. Callers hold `WallpaperChangeLock` through application and schedule
-  updates. `WallpaperRenderer` owns image processing; the controller recycles applied bitmaps.
-- Operation `Result` values contain success or failure. Progress belongs to UI state,
-  and coroutine cancellation propagates instead of becoming a failure result.
-- Room migrations preserve versions 1–3 when upgrading to version 4. New schema
-  changes must include a migration; destructive fallback is disabled.
-
-## Building from Source
+## Building from source
 
 ### Prerequisites
 
@@ -85,59 +83,122 @@ Help translate Paperize into your language! Currently, most translations are pro
 |-------------|---------|
 | Java | 17 |
 | Android Gradle Plugin | 9.3.2 |
-| Gradle | 9.7.1 |
+| Gradle | 9.7.1 (wrapper included) |
 | Compile SDK | 37 (Android 17) |
 | Minimum SDK | 31 (Android 12) |
 | Target SDK | 36 |
 
-### Build Steps
+Set `ANDROID_HOME` to your Android SDK, or put `sdk.dir` in `local.properties`. On Windows, use
+`gradlew.bat` in place of `./gradlew`.
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Anthonyy232/Paperize.git
-   cd Paperize
-   ```
-
-2. **Open in Android Studio**
-   - Launch Android Studio
-   - Select `File > Open` and navigate to the cloned repository
-
-3. **Build and Run**
-   - Click `▶ Run` to build and install on a connected device, or
-   - Select `Build > Generate Signed Bundle / APK` to create a signed release
-
----
-
-### Verification
-
-Set `ANDROID_HOME` to your Android SDK directory, or configure `sdk.dir` in
-`local.properties`. Use the checked-in Gradle wrapper:
+### Debug build
 
 ```bash
-./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew assembleDebug
+```
+
+The APK is in `app/build/outputs/apk/debug/`.
+
+### Release build
+
+Release builds are shrunk with R8 and signed with your own key.
+
+1. Create a key once, and keep it somewhere safe outside the repository. **Back it up:** an app
+   signed with it can only be updated by an APK signed with the same key. `keytool` comes with
+   Java and asks for the passwords itself.
+
+   ```bash
+   keytool -genkeypair -v -keystore ~/keys/paperized-release.jks -alias paperized -keyalg RSA -keysize 4096 -validity 10000
+   ```
+
+2. Create `keystore.properties` in the project root. Git ignores it and any `*.jks` file.
+
+   ```properties
+   storeFile=C:/Users/you/keys/paperized-release.jks
+   storePassword=...
+   keyAlias=paperized
+   keyPassword=...
+   ```
+
+3. Build:
+
+   ```bash
+   ./gradlew assembleRelease
+   ```
+
+   The signed APK is `app/build/outputs/apk/release/app-release.apk`. Without a key the build
+   still works and produces `app-release-unsigned.apk`, which Android won't install.
+
+CI builds use the `SIGNING_KEYSTORE_PATH`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS` and
+`SIGNING_KEY_PASSWORD` environment variables instead, which take precedence over the file. The
+GitHub workflow builds and signs releases only when the matching repository secrets are set.
+
+### Tests and checks
+
+```bash
+./gradlew clean test
+./gradlew lintDebug
+```
+
+These are what CI runs on every pull request, along with a check that the exported database
+schemas in `app/schemas` are committed.
+
+Device tests need a phone or emulator with Android 12 or newer:
+
+```bash
 ./gradlew connectedDebugAndroidTest
 ```
 
-On Windows, use `gradlew.bat`. Device tests require a running Android emulator or
-connected device (API 31 or newer). They cover rendering, scheduling, document
-provider failures, import rollback, album cleanup, and library controls.
-
-## Contributing
-
-Contributions are welcome! Feel free to:
-
-- Report bugs by opening an issue
-- Suggest features or improvements
-- Submit pull requests
+Gradle uninstalls the debug app when they finish. To keep it, install both test APKs
+(`assembleDebug assembleDebugAndroidTest`) with `adb install` and run them with
+`adb shell am instrument -w com.anthonyla.paperize.debug.test/androidx.test.runner.AndroidJUnitRunner`.
+`WallpaperUtilInstrumentedTest` sets the device's wallpaper, and the preferences and scheduler
+tests write to the debug app's own settings and jobs.
 
 ---
 
-## Support
+## Architecture
 
-If you find Paperize useful, consider supporting development through [GitHub Sponsors](https://github.com/sponsors/Anthonyy232) (one-time or monthly). Thank you!
+- `AlbumRepository` owns library changes. Imports, reordering, removal, covers and queue updates
+  use Room transactions; scans of document providers run outside them. `DocumentSource` keeps
+  Android permissions and provider queries apart from the import and refresh use cases.
+- `WallpaperRepository` owns the rotation queues and the current-wallpaper records. The rule for
+  which images rotate (not excluded, still readable, favourites only when the album says so)
+  lives in one place in the database queries.
+- `WallpaperChangeRequests` is the one way to ask for a change, from the app, tile, shortcut or
+  widgets. `WallpaperChangeService` carries requests out in the foreground and hands them to a
+  background job when Android refuses; both go through `WallpaperRequestHandler`.
+- `WallpaperController` applies static wallpapers for the service and the scheduled
+  `WallpaperChangeWorker`, which hold `WallpaperChangeLock` while applying and rescheduling.
+  `WallpaperRenderer` does the image processing.
+- `WallpaperScheduler` keeps the interval jobs in step with the settings; set times, the day and
+  night switch and dark-theme redraws use their own alarms and jobs in `service/schedule`.
+- The live wallpaper shares one queue between all its engines; only the leading engine takes
+  images from it. Its decisions live in `LiveEngineRules.kt`.
+- The database is at version 5. Every migration from version 1 is kept and tested, and
+  destructive fallback is off.
+
+## Tech stack
+
+| Category | Technology |
+|----------|------------|
+| Language | [Kotlin](https://kotlinlang.org/) |
+| UI | [Jetpack Compose](https://developer.android.com/develop/ui/compose), [Material 3](https://m3.material.io/) |
+| Dependency injection | [Hilt](https://dagger.dev/hilt/) |
+| Database | [Room](https://developer.android.com/training/data-storage/room) |
+| Background work | [WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager) |
+| Image loading | [Coil](https://coil-kt.github.io/coil/) |
+| Zoomable viewer | [Zoomable](https://github.com/usuiat/Zoomable) |
+| Drag to reorder | [Reorderable](https://github.com/Calvin-LL/Reorderable) |
+
+Only open-source libraries are used.
 
 ---
 
-## License
+## Credits and licence
 
-This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+Paperize is created by [Anthony La](https://github.com/Anthonyy232); if you find it useful,
+consider [supporting him](https://github.com/sponsors/Anthonyy232). The Simplified Chinese
+translation started with Paperize's contributors.
+
+Licensed under the **GNU General Public License v3.0**; see [LICENSE](LICENSE).

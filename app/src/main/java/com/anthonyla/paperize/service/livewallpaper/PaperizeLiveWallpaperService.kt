@@ -15,14 +15,11 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.anthonyla.paperize.R
-import com.anthonyla.paperize.core.ScalingType
-import com.anthonyla.paperize.core.ScheduleType
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.model.Wallpaper
-import com.anthonyla.paperize.domain.model.usesVisibleLiveTimer
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
@@ -62,7 +59,8 @@ import kotlinx.coroutines.withContext
  * Only the leader engine consumes the queue: the first real (non-preview) engine, preferring the
  * one drawing the home screen. It records each image once it is on screen, so a restarted engine
  * shows the same image again. Previews and other engines show the recorded image and follow the
- * leader. Broadcast receivers belong to the service, so one event advances the queue once.
+ * leader. Broadcast receivers belong to the service, so one event advances the queue once. The
+ * engines' decisions live in LiveEngineRules.kt, where they are tested.
  */
 @AndroidEntryPoint
 class PaperizeLiveWallpaperService : GLWallpaperService() {
@@ -77,9 +75,12 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
         private const val TAG = "PaperizeLiveWallpaper"
     }
 
-    /** Engines in creation order. Engine callbacks and receivers all run on the main thread. */
-    private val engines = mutableListOf<PaperizeLiveWallpaperEngine>()
-    private var leader: PaperizeLiveWallpaperEngine? = null
+    /** Engine callbacks and receivers all run on the main thread. */
+    private val roster = EngineRoster<PaperizeLiveWallpaperEngine>(
+        isPreview = { it.isPreview },
+        drawsHomeScreen = { it.drawsHomeScreen() }
+    )
+    private val leader: PaperizeLiveWallpaperEngine? get() = roster.leader
 
     private val reloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -123,27 +124,25 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
     }
 
     private fun attach(engine: PaperizeLiveWallpaperEngine) {
-        engines += engine
-        electLeader()
+        if (roster.attach(engine)) onLeaderChanged()
     }
 
     private fun detach(engine: PaperizeLiveWallpaperEngine) {
-        engines -= engine
-        electLeader()
+        if (roster.detach(engine)) onLeaderChanged()
     }
 
     private fun electLeader() {
-        val candidates = engines.filterNot { it.isPreview }
-        val elected = candidates.firstOrNull { it.drawsHomeScreen() } ?: candidates.firstOrNull()
-        if (elected === leader) return
-        leader = elected
-        Log.d(TAG, "Leader engine is now $elected")
-        engines.forEach { it.onLeadershipChanged() }
+        if (roster.elect()) onLeaderChanged()
+    }
+
+    private fun onLeaderChanged() {
+        Log.d(TAG, "Leader engine is now $leader")
+        roster.engines.forEach { it.onLeadershipChanged() }
     }
 
     /** The leader showed a new image; every other engine shows it too. */
     private fun onLeaderShowed(wallpaperId: String) {
-        engines.filterNot { it === leader }.forEach { it.follow(wallpaperId) }
+        roster.followers().forEach { it.follow(wallpaperId) }
     }
 
     inner class PaperizeLiveWallpaperEngine : GLEngine(),
@@ -152,18 +151,14 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
         private lateinit var renderer: PaperizeWallpaperRenderer
         private lateinit var renderController: PaperizeRenderController
         private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        private var currentAlbumId: String? = null
-        private var settingsObserved = false
         /** The image this engine shows; main thread only. */
         private var shownWallpaper: Wallpaper? = null
         private var recordedWallpaperId: String? = null
         /** Selection for the next load. A new engine resumes the recorded image. */
         private var nextSelection = LiveSelection.RESUME
-        private var observedScalingType: ScalingType? = null
         private var hasShownParallaxWarning = false
         private var engineVisible = false
-        private var latestSettings = ScheduleSettings()
-        private var latestWallpaperMode = WallpaperMode.STATIC
+        private val tracker = LiveSettingsTracker()
         private var liveIntervalJob: Job? = null
 
         private val isLeader: Boolean get() = leader === this
@@ -209,10 +204,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
 
         /** Build the loader for the pending selection; it chooses and decodes on the renderer's thread. */
         private suspend fun openArtwork(): ImageLoader {
-            val selection = when {
-                isPreview || !isLeader -> LiveSelection.PEEK
-                else -> nextSelection
-            }
+            val selection = liveSelectionFor(isPreview, isLeader, nextSelection)
             return withContext(Dispatchers.IO) {
                 // Live Wallpaper only operates in LIVE mode
                 // In STATIC mode, the static wallpaper worker handles HOME/LOCK screens separately
@@ -256,7 +248,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
             val wallpaper = (loader as? LiveWallpaperImageLoader)?.wallpaper ?: return
             shownWallpaper = wallpaper
             // Only the leader records, after the image is on screen, so a restart resumes it.
-            if (!isLeader || loader.selection == LiveSelection.PEEK || recordedWallpaperId == wallpaper.id) return
+            if (!recordsShownImage(isLeader, loader.selection, recordedWallpaperId, wallpaper.id)) return
             recordedWallpaperId = wallpaper.id
             engineScope.launch {
                 try {
@@ -316,43 +308,19 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                 }.catch { e ->
                     Log.e(TAG, "Error observing settings", e)
                 }.collect { (settings, mode, albumEffects) ->
-                    val timerConfigurationChanged =
-                        latestWallpaperMode != mode ||
-                            latestSettings.enableChanger != settings.enableChanger ||
-                            latestSettings.albumFor(ScreenType.LIVE) != settings.albumFor(ScreenType.LIVE) ||
-                            latestSettings.liveIntervalMinutes != settings.liveIntervalMinutes ||
-                            latestSettings.scheduleType != settings.scheduleType
-                    // The same albums picked, but the other one now in use: day turned to night or back.
-                    val dayNightSwitch = latestSettings.liveAlbumId == settings.liveAlbumId &&
-                        latestSettings.liveNightAlbumId == settings.liveNightAlbumId
-                    latestSettings = settings
-                    latestWallpaperMode = mode
-                    if (timerConfigurationChanged) restartLiveIntervalTimer()
-
-                    if (mode != WallpaperMode.LIVE) {
-                        return@collect
-                    }
+                    val update = tracker.update(settings, mode, ::automaticChangeAllowed)
+                    if (update.restartTimer) restartLiveIntervalTimer()
+                    if (!update.live) return@collect
 
                     val albumId = settings.albumFor(ScreenType.LIVE)
                     val effects = settings.liveEffects.withAlbumEffects(albumEffects)
-                    val scalingType = settings.liveScalingType
-
-                    // The first value only records the album the engine started with; its initial
-                    // load already resumes that album's image.
-                    val albumChanged = settingsObserved && albumId != currentAlbumId
-                    settingsObserved = true
-                    currentAlbumId = albumId
 
                     renderer.updateEffects(effects)
-                    renderer.updateScalingType(scalingType)
+                    renderer.updateScalingType(settings.liveScalingType)
                     renderer.updateAdaptiveBrightness(settings.adaptiveBrightness)
 
-                    val scalingChanged =
-                        observedScalingType != null && observedScalingType != scalingType
-                    observedScalingType = scalingType
-
                     val shown = shownWallpaper
-                    if (scalingChanged && !albumChanged && albumId != null && shown != null) {
+                    if (update.reloadForScaling && albumId != null && shown != null) {
                         Log.d(TAG, "Live scaling changed; reloading current wallpaper without advancing")
                         renderer.queueWallpaper(liveLoader(albumId, settings, LiveSelection.RESUME, pinned = shown))
                     }
@@ -366,14 +334,14 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                         ).show()
                     }
 
-                    if (albumChanged && dayNightSwitch && !automaticChangeAllowed(settings)) {
-                        // Like a static screen, the switch waits while paused or held back by the battery
-                        // settings; the next change comes from the album now in use.
-                        Log.d(TAG, "Day/night switch to $albumId; not changing now")
-                    } else if (albumChanged) {
-                        Log.d(TAG, "Album changed to $albumId, reloading")
-                        shownWallpaper = null
-                        if (isLeader) advance() else renderController.reloadCurrentArtwork()
+                    when (update.album) {
+                        LiveAlbumChange.HELD_BACK -> Log.d(TAG, "Day/night switch to $albumId; not changing now")
+                        LiveAlbumChange.RELOAD -> {
+                            Log.d(TAG, "Album changed to $albumId, reloading")
+                            shownWallpaper = null
+                            if (isLeader) advance() else renderController.reloadCurrentArtwork()
+                        }
+                        LiveAlbumChange.NONE -> Unit
                     }
                 }
             }
@@ -433,8 +401,8 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
             engineScope.launch {
                 val settings = settingsRepository.getScheduleSettings()
                 val leader = leader
-                if (settings.liveEffects.enableDoubleTap && leader != null) {
-                    leader.advance()
+                if (changesOnDoubleTap(settings, isPreview, hasLeader = leader != null)) {
+                    leader?.advance()
                     resetBackgroundCountdown(settings)
                 }
             }
@@ -443,7 +411,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
         fun handleScreenOff() {
             engineScope.launch {
                 val settings = settingsRepository.getScheduleSettings()
-                if (settings.liveEffects.enableChangeOnScreenOff && isLeader && changeConditions.automaticChangeBlock(settings) == null) {
+                if (changesOnScreenOff(settings, isLeader, automaticChangeAllowed(settings))) {
                     Log.d(TAG, "Screen off - changing wallpaper")
                     // Load while the screen is off, bypassing the visibility check.
                     val previous = nextSelection
@@ -481,22 +449,13 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
             liveIntervalJob?.cancel()
             liveIntervalJob = null
 
-            val intervalMinutes = latestSettings.liveIntervalMinutes
-            val shouldRun =
-                engineVisible &&
-                    isLeader &&
-                    latestWallpaperMode == WallpaperMode.LIVE &&
-                    latestSettings.enableChanger &&
-                    latestSettings.albumFor(ScreenType.LIVE) != null &&
-                    latestSettings.scheduleType == ScheduleType.INTERVAL &&
-                    usesVisibleLiveTimer(intervalMinutes)
-            if (!shouldRun) return
+            if (!runsLiveTimer(engineVisible, isLeader, tracker.mode, tracker.settings)) return
 
             liveIntervalJob = engineScope.launch {
-                val intervalMillis = intervalMinutes.toLong() * 60_000L
+                val intervalMillis = tracker.settings.liveIntervalMinutes.toLong() * 60_000L
                 while (isActive) {
                     delay(intervalMillis)
-                    val block = changeConditions.automaticChangeBlock(latestSettings)
+                    val block = changeConditions.automaticChangeBlock(tracker.settings)
                     if (block != null) {
                         // Plan 6.1: this turn is skipped; the next one checks again.
                         Log.d(TAG, "Visible live interval elapsed; not changing ($block)")

@@ -31,6 +31,16 @@ jobs:
       - name: Run unit tests
         run: ./gradlew clean test
 
+      # The build exports the database schema to app/schemas. Any difference means an entity
+      # changed without a new database version and migration, or a new schema wasn't committed.
+      - name: Check the database schemas are committed
+        run: |
+          if [ -n "$(git status --porcelain -- app/schemas)" ]; then
+            git status --porcelain -- app/schemas
+            echo "::error::Room schemas changed. Add a database version with a migration, and commit app/schemas."
+            exit 1
+          fi
+
       - name: Run Android lint
         run: ./gradlew :app:lintDebug
 
@@ -108,13 +118,13 @@ jobs:
         shell: bash
         run: |
           mv app/build/outputs/apk/release/app-release.apk \
-            "app/build/outputs/apk/release/paperize-${{ steps.get_version.outputs.VERSION_NAME }}.apk"
+            "app/build/outputs/apk/release/paperized-${{ steps.get_version.outputs.VERSION_NAME }}.apk"
 
       - name: Upload APK as a build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: paperize-${{ steps.get_version.outputs.VERSION_NAME }}
-          path: app/build/outputs/apk/release/paperize-${{ steps.get_version.outputs.VERSION_NAME }}.apk
+          name: paperized-${{ steps.get_version.outputs.VERSION_NAME }}
+          path: app/build/outputs/apk/release/paperized-${{ steps.get_version.outputs.VERSION_NAME }}.apk
           if-no-files-found: error
 
   release:
@@ -128,14 +138,14 @@ jobs:
       - name: Download signed APK artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: paperize-v*
+          pattern: paperized-v*
           path: ./apk-artifact
           merge-multiple: true
 
       - name: Create Draft Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
-          files: ./apk-artifact/paperize-v*.apk
+          files: ./apk-artifact/paperized-v*.apk
           draft: true
           generate_release_notes: true
 

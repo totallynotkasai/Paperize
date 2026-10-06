@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="album_create_failed">无法创建相册，请重试。</string>
-  <string name="app_name">Paperize</string>
+  <string name="app_name">Paperized</string>
   <string name="import_adding_folder">正在添加文件夹…</string>
   <string name="import_adding_wallpapers">正在添加壁纸…</string>
   <string name="import_scanning">正在扫描… 已找到 %1$d 张</string>
@@ -85,7 +85,7 @@
   <string name="change_wallpaper_when_screen_turns_off">息屏时更换壁纸</string>
   <string name="parallax_effect">视差效果</string>
   <string name="wallpaper_moves_with_screen_scroll">在桌面页面之间滑动可移动壁纸（需要桌面支持）</string>
-  <string name="live_wallpaper_name">Paperize 动态壁纸</string>
+  <string name="live_wallpaper_name">Paperized 动态壁纸</string>
   <string name="live_wallpaper_description">带特效与交互功能的动态壁纸</string>
   <string name="adaptive_brightness">自适应亮度</string>
   <string name="adjust_brightness_based_on_mode">根据深色/浅色模式调整亮度</string>
@@ -95,7 +95,7 @@
   <string name="select_album">选择相册</string>
   <string name="sort">排序</string>
   <string name="notification_permission_title">开启通知</string>
-  <string name="notification_permission_description">允许 Paperize 发送壁纸更换通知，以及在后台运行时显示通知。你可以随时在设置中更改。</string>
+  <string name="notification_permission_description">允许 Paperized 发送壁纸更换通知，以及在后台运行时显示通知。你可以随时在设置中更改。</string>
   <string name="skip">跳过</string>
   <string name="permission_granted">已授予权限</string>
 
@@ -141,10 +141,10 @@
   <string name="mins">分钟</string>
   <string name="total_interval">总计： </string>
   <string name="time_unit_min">分</string>
-  <string name="live_short_interval_note">低于 15 分钟的间隔仅在 Paperize 作为可见的动态壁纸运行时生效。</string>
+  <string name="live_short_interval_note">低于 15 分钟的间隔仅在 Paperized 作为可见的动态壁纸运行时生效。</string>
 
   <!-- Notification Service -->
-  <string name="notification_channel_description">Paperize 更换壁纸时短暂显示。</string>
+  <string name="notification_channel_description">Paperized 更换壁纸时短暂显示。</string>
   <string name="no_wallpapers_in_album">相册中没有壁纸</string>
   <string name="wallpaper_changer_disabled_empty_album">相册为空，壁纸更换已停用。</string>
 
@@ -177,7 +177,7 @@
 
   <!-- Live Wallpaper Selection Dialog -->
   <string name="select_live_wallpaper">选择动态壁纸</string>
-  <string name="select_live_wallpaper_instruction">若想以动态壁纸模式使用 Paperize，你需要在系统设置中把它选为动态壁纸。</string>
+  <string name="select_live_wallpaper_instruction">若想以动态壁纸模式使用 Paperized，你需要在系统设置中把它选为动态壁纸。</string>
   <string name="open_wallpaper_picker">打开壁纸选择器</string>
   <string name="later">稍后</string>
 
@@ -191,7 +191,7 @@
   <string name="switch_mode_dialog_title">切换到%1$s模式？</string>
   <string name="switch_mode_dialog_description">这将重置所有相册、壁纸和定时设置，此操作无法撤销。\n\n你需要重新添加相册并配置壁纸设置。</string>
   <string name="switch_mode_button">切换模式</string>
-  <string name="open_wallpaper_picker_instruction_newline">\n点击下方的「打开壁纸选择器」，在可用动态壁纸列表中选择 Paperize。</string>
+  <string name="open_wallpaper_picker_instruction_newline">\n点击下方的「打开壁纸选择器」，在可用动态壁纸列表中选择 Paperized。</string>
   <string name="loading_placeholder">…</string>
   <string name="album_name_exists_error">已存在同名相册</string>
   <string name="battery_optimization">电池优化</string>
@@ -233,15 +233,15 @@
   <string name="content_desc_current_live_wallpaper">当前动态壁纸</string>
 
   <!-- 格式与文件访问（分支计划 1.3、1.4） -->
-  <string name="import_none_supported">所选文件的格式 Paperize 均无法显示。</string>
+  <string name="import_none_supported">所选文件的格式 Paperized 均无法显示。</string>
   <plurals name="import_skipped_unsupported">
-    <item quantity="other">已跳过 %d 个文件，Paperize 无法显示其格式。</item>
+    <item quantity="other">已跳过 %d 个文件，Paperized 无法显示其格式。</item>
   </plurals>
   <string name="unavailable">无法打开</string>
-  <string name="error_no_available_wallpapers">此相册中的图片目前都无法打开。请在 Paperize 中打开该相册以恢复访问权限。</string>
+  <string name="error_no_available_wallpapers">此相册中的图片目前都无法打开。请在 Paperized 中打开该相册以恢复访问权限。</string>
   <string name="access_lost_title">部分图片无法打开</string>
   <plurals name="access_lost_message">
-    <item quantity="other">Paperize 已无权读取此相册中的 %d 张图片。</item>
+    <item quantity="other">Paperized 已无权读取此相册中的 %d 张图片。</item>
   </plurals>
   <string name="access_lost_folder_hint">要解决此问题，请点击“授予访问权限”，然后重新选择文件夹“%1$s”。</string>
   <string name="access_lost_images_hint">要解决此问题，请点击“授予访问权限”，然后重新选择相同的图片。</string>
@@ -257,13 +257,13 @@
   <string name="access_restore_no_match">所选内容与需要访问权限的图片不匹配。请选择之前添加的同一文件夹或文件。</string>
   <string name="grant_limit_title">单独添加的图片过多</string>
   <plurals name="grant_limit_message">
-    <item quantity="other">Android 最多允许 Paperize 保留 %1$d 个文件和文件夹的访问权限。此次选择还需要 %2$d 个，但只剩 %3$d 个。请将这些图片放入一个文件夹，然后改为添加该文件夹：一个文件夹只占用一个。</item>
+    <item quantity="other">Android 最多允许 Paperized 保留 %1$d 个文件和文件夹的访问权限。此次选择还需要 %2$d 个，但只剩 %3$d 个。请将这些图片放入一个文件夹，然后改为添加该文件夹：一个文件夹只占用一个。</item>
   </plurals>
   <string name="grant_warning_title">接近 Android 的文件数量上限</string>
-  <string name="grant_warning_message">Paperize 即将达到 Android 允许应用保留访问权限的文件和文件夹数量上限（%1$d/%2$d）。超出上限后，Android 会静默移除最早的权限，相应的图片将无法使用。请尽量添加文件夹，而不是单独的图片。</string>
-  <string name="live_wallpaper_not_set_title">Paperize 不是当前的动态壁纸</string>
-  <string name="live_wallpaper_not_set_message">你的相册和设置都已保留。将 Paperize 设为动态壁纸即可重新显示。</string>
-  <string name="live_wallpaper_permission_hint">如果壁纸选择器立即关闭，请在应用信息中（权限或其他权限）允许 Paperize 更改壁纸。</string>
+  <string name="grant_warning_message">Paperized 即将达到 Android 允许应用保留访问权限的文件和文件夹数量上限（%1$d/%2$d）。超出上限后，Android 会静默移除最早的权限，相应的图片将无法使用。请尽量添加文件夹，而不是单独的图片。</string>
+  <string name="live_wallpaper_not_set_title">Paperized 不是当前的动态壁纸</string>
+  <string name="live_wallpaper_not_set_message">你的相册和设置都已保留。将 Paperized 设为动态壁纸即可重新显示。</string>
+  <string name="live_wallpaper_permission_hint">如果壁纸选择器立即关闭，请在应用信息中（权限或其他权限）允许 Paperized 更改壁纸。</string>
   <string name="set_live_wallpaper">设置动态壁纸</string>
   <string name="app_info">应用信息</string>
   <string name="effects_need_a_screen">请先在上方开启主屏幕或锁屏，再更改效果。</string>
@@ -277,21 +277,21 @@
   <string name="wallpaper_changed">壁纸已更换</string>
   <string name="wallpaper_set">壁纸已设置</string>
   <string name="setting_wallpaper">正在设置壁纸…</string>
-  <string name="change_feedback_live_not_set">Paperize 不是当前的动态壁纸，因此没有任何变化。</string>
+  <string name="change_feedback_live_not_set">Paperized 不是当前的动态壁纸，因此没有任何变化。</string>
   <string name="change_feedback_nothing">没有可更换的内容。请先开启一个屏幕并选择相册。</string>
   <string name="change_failed">无法更换壁纸。</string>
   <string name="change_failed_with_reason">无法更换壁纸：%1$s</string>
   <string name="change_failed_title">无法更换壁纸</string>
   <string name="notification_channel_activity">壁纸更换</string>
   <string name="notification_channel_alerts">问题</string>
-  <string name="notification_channel_alerts_description">Paperize 无法更换壁纸，或相册中已没有图片时通知。</string>
+  <string name="notification_channel_alerts_description">Paperized 无法更换壁纸，或相册中已没有图片时通知。</string>
   <string name="tile_label">下一张壁纸</string>
   <string name="tile_on">开启</string>
   <string name="tile_paused">已暂停</string>
   <string name="tile_no_album">无相册</string>
   <string name="content_desc_folder">文件夹 %1$s，%2$s</string>
   <string name="import_hide">隐藏</string>
-  <string name="import_continues_hint">你可以离开此页面。只要 Paperize 处于打开状态，添加就会继续。</string>
+  <string name="import_continues_hint">你可以离开此页面。只要 Paperized 处于打开状态，添加就会继续。</string>
 
   <!-- 小组件（分支计划 4.1） -->
   <string name="widget_shuffle_home">主页换一张</string>
@@ -302,10 +302,10 @@
   <string name="widget_shuffle_both_description">轻点即可为每个已开启的屏幕换下一张壁纸。在动态模式下会切换动态壁纸。</string>
   <string name="widget_not_set_up">未设置</string>
   <string name="widget_content_desc_not_set_up">%1$s，未设置</string>
-  <string name="widget_home_not_set_up">请先在 Paperize 中开启主页并选择其相册。</string>
-  <string name="widget_lock_not_set_up">请先在 Paperize 中开启锁屏并选择其相册。</string>
-  <string name="widget_both_not_set_up">请先在 Paperize 中设置主页或锁屏。</string>
-  <string name="widget_live_no_album">请先在 Paperize 中选择动态相册。</string>
+  <string name="widget_home_not_set_up">请先在 Paperized 中开启主页并选择其相册。</string>
+  <string name="widget_lock_not_set_up">请先在 Paperized 中开启锁屏并选择其相册。</string>
+  <string name="widget_both_not_set_up">请先在 Paperized 中设置主页或锁屏。</string>
+  <string name="widget_live_no_album">请先在 Paperized 中选择动态相册。</string>
   <string name="widget_changing_lock">正在更换锁屏壁纸…</string>
 
   <!-- 动态自动平移（分支计划 4.2） -->
@@ -372,12 +372,12 @@
     <item quantity="other">%d 张已排除</item>
   </plurals>
   <string name="count_with_excluded">%1$s · %2$s</string>
-  <string name="error_all_wallpapers_excluded">此相册中的所有图片都已排除在轮换之外。请在 Paperize 中恢复部分图片以继续更换。</string>
+  <string name="error_all_wallpapers_excluded">此相册中的所有图片都已排除在轮换之外。请在 Paperized 中恢复部分图片以继续更换。</string>
   <!-- Phase 6: smarter scheduling -->
   <string name="notification_channel_listener">熄屏和解锁时更换</string>
-  <string name="notification_channel_listener_description">Paperize 等待屏幕关闭或手机解锁时，Android 需要显示此通知。你可以关闭它，更换仍会照常进行。</string>
+  <string name="notification_channel_listener_description">Paperized 等待屏幕关闭或手机解锁时，Android 需要显示此通知。你可以关闭它，更换仍会照常进行。</string>
   <string name="listener_notification_title">准备更换壁纸</string>
-  <string name="listener_notification_text">按你在 Paperize 中的设置，在熄屏或解锁时更换。</string>
+  <string name="listener_notification_text">按你在 Paperized 中的设置，在熄屏或解锁时更换。</string>
   <string name="hide_notification">隐藏通知</string>
   <string name="schedule_type_title">计划</string>
   <string name="schedule_type_interval">间隔</string>
@@ -409,7 +409,7 @@
   <string name="trigger_gap_none">无</string>
   <string name="trigger_gap_minutes">%d 分钟</string>
   <string name="trigger_gap_hours">%d 小时</string>
-  <string name="listener_notice">Paperize 等待这些事件时，Android 需要显示一条通知。它不会发出声音，但 Android 可能仍会在状态栏显示其图标。关闭此通知即可隐藏，更换仍会照常进行。</string>
+  <string name="listener_notice">Paperized 等待这些事件时，Android 需要显示一条通知。它不会发出声音，但 Android 可能仍会在状态栏显示其图标。关闭此通知即可隐藏，更换仍会照常进行。</string>
   <string name="listener_notice_hidden">通知已关闭，更换仍会照常进行。</string>
   <string name="notification_settings">通知设置</string>
   <string name="day_night_title">白天和夜间</string>

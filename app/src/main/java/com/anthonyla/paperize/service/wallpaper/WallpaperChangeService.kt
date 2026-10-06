@@ -28,38 +28,34 @@ class WallpaperChangeService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+    /** Created on the first start, once Hilt has injected the service. */
+    private val starts by lazy {
+        ChangeServiceStarts(
+            scope = serviceScope,
+            handle = handler::handle,
+            handOver = { request, report -> WallpaperRequestWorker.enqueue(this, request, report) },
+            endReport = events::end,
+            stop = ::stopSelf
+        )
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val request = intent?.toWallpaperRequest()
-        val report = intent?.isReported() == true
-        try {
+        val inForeground = try {
             startForeground(
                 Constants.NOTIFICATION_ID,
                 createNotification(),
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
             )
+            true
         } catch (e: IllegalStateException) {
             // Android can still refuse once started, e.g. when the data-sync time allowance is
-            // used up. Hand the request to a background job instead of crashing.
+            // used up. The request goes to a background job instead of crashing.
             Log.w(TAG, "Could not run in the foreground; handing over to a background job", e)
-            if (request != null) WallpaperRequestWorker.enqueue(this, request, report)
-            else if (report) events.end()
-            stopSelf(startId)
-            return START_NOT_STICKY
+            false
         }
-
-        if (request == null) {
-            Log.w(TAG, "Unknown action: ${intent?.action}")
-            if (report) events.end()
-            stopSelf(startId)
-            return START_NOT_STICKY
-        }
-        serviceScope.launch {
-            try {
-                handler.handle(request, report)
-            } finally {
-                stopSelf(startId)
-            }
-        }
+        val request = intent?.toWallpaperRequest()
+        if (request == null) Log.w(TAG, "Unknown action: ${intent?.action}")
+        starts.start(request, report = intent?.isReported() == true, startId = startId, inForeground = inForeground)
         return START_NOT_STICKY
     }
 
@@ -93,5 +89,40 @@ class WallpaperChangeService : Service() {
             "com.anthonyla.paperize.ACTION_CHANGE_WALLPAPER_AUTO"
         const val ACTION_APPLY_SPECIFIC_WALLPAPER = Constants.ACTION_APPLY_SPECIFIC_WALLPAPER
         const val ACTION_REAPPLY_EFFECTS = Constants.ACTION_REAPPLY_EFFECTS
+    }
+}
+
+/**
+ * What [WallpaperChangeService] does with each start, kept apart from Android so it can be tested.
+ * Each start stops only itself ([stop] takes its start ID), so requests that overlap all finish.
+ * A reported request is always ended exactly once, whichever way it goes, so the app never keeps
+ * waiting for it: by the handler, by the background job it is handed to, or here.
+ */
+internal class ChangeServiceStarts(
+    private val scope: CoroutineScope,
+    private val handle: suspend (WallpaperRequest, Boolean) -> Unit,
+    private val handOver: (WallpaperRequest, Boolean) -> Unit,
+    private val endReport: () -> Unit,
+    private val stop: (Int) -> Unit
+) {
+    /** [inForeground]: whether Android let the service run in the foreground for this start. */
+    fun start(request: WallpaperRequest?, report: Boolean, startId: Int, inForeground: Boolean) {
+        when {
+            request == null -> {
+                if (report) endReport()
+                stop(startId)
+            }
+            !inForeground -> {
+                handOver(request, report)
+                stop(startId)
+            }
+            else -> scope.launch {
+                try {
+                    handle(request, report)
+                } finally {
+                    stop(startId)
+                }
+            }
+        }
     }
 }

@@ -1,3 +1,4 @@
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -12,18 +13,31 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+// Release signing key: CI passes it in environment variables; locally, a git-ignored
+// keystore.properties in the project root names it (see the README). Without either, release
+// builds come out unsigned.
+val keystoreProperties = Properties().apply {
+    providers.fileContents(rootProject.layout.projectDirectory.file("keystore.properties"))
+        .asText.orNull?.let { load(it.reader()) }
+}
+
+fun signingValue(environmentVariable: String, property: String): String? =
+    providers.environmentVariable(environmentVariable).orNull?.takeIf { it.isNotBlank() }
+        ?: keystoreProperties.getProperty(property)?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "com.anthonyla.paperize"
     compileSdk = 37
 
     signingConfigs {
         create("release") {
-            val storeFilePath = System.getenv("SIGNING_KEYSTORE_PATH")
+            val storeFilePath = signingValue("SIGNING_KEYSTORE_PATH", "storeFile")
             if (storeFilePath != null) {
-                storeFile = file(storeFilePath)
-                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
-                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+                // Relative paths start at the project root, next to keystore.properties.
+                storeFile = rootProject.file(storeFilePath)
+                storePassword = signingValue("SIGNING_STORE_PASSWORD", "storePassword")
+                keyAlias = signingValue("SIGNING_KEY_ALIAS", "keyAlias")
+                keyPassword = signingValue("SIGNING_KEY_PASSWORD", "keyPassword")
             }
         }
     }
@@ -38,8 +52,9 @@ android {
         applicationId = "com.anthonyla.paperize"
         minSdk = 31
         targetSdk = 36
-        versionCode = 57
-        versionName = "4.2.0"
+        // The fork's own releases: upstream 4.2.0 plus the fork's changes.
+        versionCode = 58
+        versionName = "4.2.0-fork.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -59,7 +74,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
+            // `-Ppaperized.tryRelease` builds the shrunk release under the debug app's ID and key,
+            // so it can be tried on a phone over Paperized Debug without touching the real app.
+            if (providers.gradleProperty("paperized.tryRelease").isPresent) {
+                applicationIdSuffix = ".debug"
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 
