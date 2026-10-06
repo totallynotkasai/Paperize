@@ -42,12 +42,13 @@ class PaperizeRenderController(
         }
     }
 
-    /** Prepare the next wallpaper while the screen is dark, without crossfading. */
-    fun forceReloadCurrentArtwork() {
-        if (isLoading) return
+    /** Prepare the next wallpaper while the screen is dark, without crossfading. Returns whether it started. */
+    fun forceReloadCurrentArtwork(): Boolean {
+        if (isLoading) return false
         hasPendingReload = false
         throttleJob?.cancel()
         executeReload(skipCrossfade = true)
+        return true
     }
 
     private fun executeReload(skipCrossfade: Boolean = false) {

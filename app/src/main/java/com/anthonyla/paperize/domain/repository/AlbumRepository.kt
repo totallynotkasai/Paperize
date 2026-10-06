@@ -36,6 +36,7 @@ interface AlbumRepository {
 
     suspend fun reorderAlbum(albumId: String, folders: List<Folder>, wallpapers: List<Wallpaper>): Result<Unit>
 
+    /** Also releases file grants that no album uses any more; the same applies to the deletes below. */
     suspend fun removeWallpapersFromAlbum(albumId: String, wallpaperIds: List<String>): Result<Unit>
 
     suspend fun removeFolderFromAlbum(albumId: String, folderId: String): Result<Unit>
@@ -44,4 +45,13 @@ interface AlbumRepository {
 
     /** Removes confirmed missing entries and updates covers in the same transaction. */
     suspend fun pruneMissingEntries(albumId: String): Result<Int>
+
+    /**
+     * Mark images whose grant is gone (and clear the mark once it is back). Direct images need
+     * their own grant; folder images are covered by their folder's grant. Returns rows changed.
+     */
+    suspend fun syncAccess(albumId: String): Result<Int>
+
+    /** Point an image at a newly granted copy of the same file and mark it readable. */
+    suspend fun relinkWallpaper(wallpaperId: String, uri: String): Result<Unit>
 }

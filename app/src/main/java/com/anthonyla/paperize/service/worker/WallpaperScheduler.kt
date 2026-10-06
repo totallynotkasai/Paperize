@@ -99,12 +99,10 @@ class WallpaperScheduler @Inject constructor(
         onlyIfNotScheduled: Boolean = false
     ) = mutex.withLock {
         val enabled = settings.enableChanger && settings.hasRequiredAlbums(mode)
-        val targets = if (enabled) settings.activeScreens(mode) else emptySet()
+        val targets = scheduledScreens(settings, mode)
         for (screen in ScreenType.entries) {
-            val interval = settings.intervalMinutes(screen)
-            val handledByEngine = screen == ScreenType.LIVE && interval < Constants.MIN_INTERVAL_MINUTES
-            if (screen in targets && interval > 0 && !handledByEngine) {
-                scheduleWallpaperChange(screen, interval, onlyIfNotScheduled = onlyIfNotScheduled)
+            if (screen in targets) {
+                scheduleWallpaperChange(screen, settings.intervalMinutes(screen), onlyIfNotScheduled = onlyIfNotScheduled)
             } else {
                 cancelWallpaperChange(screen)
             }
@@ -182,6 +180,15 @@ class WallpaperScheduler @Inject constructor(
         }
     }
 
+}
+
+/** The periodic jobs these settings call for. Short live intervals run in the visible engine instead. */
+internal fun scheduledScreens(settings: ScheduleSettings, mode: WallpaperMode): Set<ScreenType> {
+    if (!settings.enableChanger || !settings.hasRequiredAlbums(mode)) return emptySet()
+    return settings.activeScreens(mode).filterTo(mutableSetOf()) { screen ->
+        val interval = settings.intervalMinutes(screen)
+        interval > 0 && !(screen == ScreenType.LIVE && interval < Constants.MIN_INTERVAL_MINUTES)
+    }
 }
 
 internal fun scheduledScreensToReset(

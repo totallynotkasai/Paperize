@@ -1,5 +1,6 @@
 package com.anthonyla.paperize.data.database.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -45,4 +46,15 @@ data class WallpaperEntity(
     val addedAt: Long = System.currentTimeMillis(),
 
     val mediaType: WallpaperMediaType = WallpaperMediaType.IMAGE,
+
+    /** Never rotates (schema v5). */
+    @ColumnInfo(defaultValue = "0")
+    val excluded: Boolean = false,
+
+    @ColumnInfo(defaultValue = "0")
+    val favorite: Boolean = false,
+
+    /** Paperize no longer holds a grant that covers [uri] (schema v5). */
+    @ColumnInfo(defaultValue = "0")
+    val accessLost: Boolean = false
 )

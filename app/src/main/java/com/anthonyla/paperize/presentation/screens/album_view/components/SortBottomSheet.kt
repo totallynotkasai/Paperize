@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -30,6 +31,8 @@ import com.anthonyla.paperize.R
 import com.anthonyla.paperize.presentation.theme.AppSpacing
 
 enum class SortOption(val labelRes: Int) {
+    /** The order wallpapers change in when shuffle is off: direct images, then each folder. */
+    ROTATION(R.string.sort_rotation_order),
     NAME_ASC(R.string.sort_name_asc),
     NAME_DESC(R.string.sort_name_desc),
     DATE_ADDED_ASC(R.string.sort_date_added_asc),
@@ -39,6 +42,7 @@ enum class SortOption(val labelRes: Int) {
 
     val wallpaperComparator: Comparator<Wallpaper>
         get() = when (this) {
+            ROTATION -> compareBy<Wallpaper> { it.displayOrder }.thenBy { it.id }
             NAME_ASC -> compareBy { it.fileName.lowercase() }
             NAME_DESC -> compareByDescending { it.fileName.lowercase() }
             DATE_ADDED_ASC -> compareBy { it.addedAt }
@@ -76,13 +80,20 @@ fun SortBottomSheet(
             HorizontalDivider()
 
             SortOption.entries.forEachIndexed { index, option ->
-                if (index > 0 && index % 2 == 0) HorizontalDivider()
+                // Rotation order stands alone; the others come in ascending/descending pairs.
+                if (index % 2 == 1) HorizontalDivider()
                 ListItem(
                     content = { Text(stringResource(option.labelRes)) },
+                    supportingContent = if (option == SortOption.ROTATION) {
+                        { Text(stringResource(R.string.sort_rotation_order_description)) }
+                    } else null,
                     leadingContent = {
                         Icon(
-                            if (option == SortOption.NAME_ASC || option == SortOption.NAME_DESC)
-                                Icons.Default.SortByAlpha else Icons.Default.AccessTime,
+                            when (option) {
+                                SortOption.ROTATION -> Icons.Default.Repeat
+                                SortOption.NAME_ASC, SortOption.NAME_DESC -> Icons.Default.SortByAlpha
+                                else -> Icons.Default.AccessTime
+                            },
                             contentDescription = null
                         )
                     },

@@ -108,6 +108,17 @@ class HomeViewModel @Inject constructor(
         .flatMapLatest { albumId -> currentWallpaperUriFlow(albumId, ScreenType.LOCK) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), null)
 
+    /** The image the live wallpaper last put on screen; recorded by its engine. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val currentLiveWallpaperUri: StateFlow<String?> = scheduleSettings
+        .map { it.liveAlbumId }
+        .distinctUntilChanged()
+        .flatMapLatest { albumId ->
+            if (albumId == null) flowOf(null)
+            else wallpaperRepository.getCurrentWallpaperFlow(albumId, ScreenType.LIVE).map { it?.uri }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), null)
+
     private fun currentWallpaperUriFlow(albumId: String?, screenType: ScreenType): Flow<String?> =
         if (albumId == null) {
             flowOf(null)

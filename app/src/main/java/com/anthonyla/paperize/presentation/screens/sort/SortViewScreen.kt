@@ -93,9 +93,10 @@ fun SortViewScreen(
         }
     }
 
-    val topBarTitle = remember(expandedFolderId, state.folders) {
-        state.folders.find { it.id == expandedFolderId }?.name.orEmpty()
+    val expandedFolderName = remember(expandedFolderId, state.folders) {
+        state.folders.find { it.id == expandedFolderId }?.displayName
     }
+    val topBarTitle = expandedFolderName ?: stringResource(R.string.rotation_order_title)
 
     val reorderableLazyListStateFolder = rememberReorderableLazyListState(lazyListState) { from, to ->
         sortViewModel.onEvent(SortEvent.ShiftFolder(from, to))
@@ -140,6 +141,40 @@ fun SortViewScreen(
                     contentPadding = PaddingValues(AppSpacing.small),
                     verticalArrangement = Arrangement.spacedBy(AppSpacing.small),
                 ) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.reorder_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(AppSpacing.small)
+                        )
+                    }
+                    // Same order as the rotation: images added directly, then each folder.
+                    if (state.wallpapers.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.wallpapers_sort),
+                                modifier = Modifier.padding(AppSpacing.small),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    items(state.wallpapers, key = { it.uri }) { wallpaper ->
+                        ReorderableItem(
+                            reorderableLazyListStateWallpaper,
+                            key = wallpaper.uri
+                        ) { _ ->
+                            WallpaperSortCard(
+                                wallpaper = wallpaper,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .longPressDraggableHandle(
+                                        onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate) },
+                                        onDragStopped = { haptics.performHapticFeedback(HapticFeedbackType.GestureEnd) },
+                                    ),
+                            )
+                        }
+                    }
                     if (state.folders.isNotEmpty()) {
                         item {
                             Text(
@@ -191,31 +226,6 @@ fun SortViewScreen(
                             }
                         }
                     }
-                    if (state.wallpapers.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = stringResource(R.string.wallpapers_sort),
-                                modifier = Modifier.padding(AppSpacing.small),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                    items(state.wallpapers, key = { it.uri }) { wallpaper ->
-                        ReorderableItem(
-                            reorderableLazyListStateWallpaper,
-                            key = wallpaper.uri
-                        ) { _ ->
-                            WallpaperSortCard(
-                                wallpaper = wallpaper,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .longPressDraggableHandle(
-                                        onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate) },
-                                        onDragStopped = { haptics.performHapticFeedback(HapticFeedbackType.GestureEnd) },
-                                    ),
-                            )
-                        }
-                    }
                 }
             } else {
                 LazyColumn(
@@ -246,7 +256,7 @@ fun SortViewScreen(
                                 },
                                 content = {
                                     Text(
-                                        text = currentFolder.name,
+                                        text = currentFolder.displayName,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )

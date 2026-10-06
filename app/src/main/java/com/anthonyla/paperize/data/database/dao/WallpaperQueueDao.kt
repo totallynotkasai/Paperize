@@ -11,10 +11,15 @@ import com.anthonyla.paperize.data.database.entities.WallpaperQueueEntity
 
 @Dao
 interface WallpaperQueueDao {
+    /**
+     * Unreadable or excluded images stay queued but are passed over, so restored access resumes their
+     * place. Once only those remain, this returns null and the caller rebuilds the queue.
+     */
     @Query("""
         SELECT w.* FROM wallpapers w
         INNER JOIN wallpaper_queue wq ON w.id = wq.wallpaperId
         WHERE wq.albumId = :albumId AND wq.screenType = :screenType
+        AND w.accessLost = 0 AND w.excluded = 0
         ORDER BY wq.queuePosition ASC
         LIMIT 1
     """)

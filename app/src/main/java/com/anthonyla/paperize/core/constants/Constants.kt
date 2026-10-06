@@ -3,7 +3,7 @@ package com.anthonyla.paperize.core.constants
 object Constants {
     // Database
     const val DATABASE_NAME = "paperize_database"
-    const val DATABASE_VERSION = 4  // v4: Removed unused cropOffsetX/Y/Scale columns from wallpapers table
+    const val DATABASE_VERSION = 5  // v5: exclude/favourite/lost-access flags, per-album effects and favourites mode
 
     // DataStore
     const val PREFERENCES_NAME = "paperize_preferences"
@@ -100,16 +100,6 @@ object Constants {
     const val MAX_DAYS_INPUT_LENGTH = 3
     const val MAX_HOURS_MINUTES_INPUT_LENGTH = 2
 
-    // File types
-    val SUPPORTED_IMAGE_EXTENSIONS = setOf(
-        "jpg", "jpeg", "png", "webp", "avif",
-        "heic", "heif",  // HEIC/HEIF - Apple's high efficiency format
-        "bmp",           // Bitmap - legacy but still used
-        "gif",           // GIF - mostly for static images (first frame used)
-        "tiff", "tif",   // TIFF - high quality archival format
-        "svg"            // SVG - vector graphics (rasterized for wallpaper)
-    )
-
     // Renderer
     const val CROSSFADE_DURATION_MS = 750f
     const val RELOAD_THROTTLE_MS = 250L
@@ -119,6 +109,11 @@ object Constants {
 
     // Wallpaper loading
     const val MAX_WALLPAPER_LOAD_RETRIES = 10
+
+    // File access. Android 11+ keeps at most 512 persisted grants per app and silently drops the
+    // oldest beyond that, so imports stop before the limit and warn as it gets close.
+    const val MAX_PERSISTED_URI_GRANTS = 512
+    const val PERSISTED_URI_GRANT_WARNING = 400
     const val MAX_QUEUE_REBUILD_ATTEMPTS = 2
 }
 

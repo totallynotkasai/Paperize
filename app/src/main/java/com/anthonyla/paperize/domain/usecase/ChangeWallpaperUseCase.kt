@@ -40,7 +40,13 @@ class ChangeWallpaperUseCase @Inject constructor(
             val candidate = wallpaperRepository.getAndDequeueWallpaper(albumId, screenType) ?: run {
                 wallpaperRepository.ensureWallpaperQueue(albumId, screenType, settings.shuffleEnabled).getOrThrow()
                 wallpaperRepository.getAndDequeueWallpaper(albumId, screenType)
-                    ?: throw EmptyAlbumException(context.getString(R.string.no_wallpapers_in_album))
+                    ?: throw if (wallpaperRepository.countWallpapers(albumId) == 0) {
+                        EmptyAlbumException(context.getString(R.string.no_wallpapers_in_album))
+                    } else {
+                        // Every image is unreadable or excluded; keep the album selected so restoring
+                        // access resumes the rotation.
+                        NoValidWallpaperException(context.getString(R.string.error_no_available_wallpapers))
+                    }
             }
             try {
                 val bitmap = renderer.render(candidate, screenType, settings)

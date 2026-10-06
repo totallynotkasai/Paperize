@@ -1,5 +1,6 @@
 package com.anthonyla.paperize.data.repository
 
+import android.util.Log
 import androidx.room.withTransaction
 import com.anthonyla.paperize.core.Result
 import com.anthonyla.paperize.core.util.generateId
@@ -14,8 +15,11 @@ import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.source.DocumentSource
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 @Singleton
 class AlbumRepositoryImpl @Inject constructor(
@@ -27,6 +31,7 @@ class AlbumRepositoryImpl @Inject constructor(
     private val folderDao = database.folderDao()
 
     companion object {
+        private const val TAG = "AlbumRepository"
         private const val WALLPAPER_BATCH_SIZE = 500
     }
 
@@ -50,7 +55,12 @@ class AlbumRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteAlbum(albumId: String): Result<Unit> = Result.runCatching {
-        albumDao.deleteAlbumById(albumId)
+        val (imageUris, folderUris) = database.withTransaction {
+            val uris = wallpaperDao.getDirectUris(albumId) to folderDao.getFoldersByAlbum(albumId).map { it.uri }
+            albumDao.deleteAlbumById(albumId)
+            uris
+        }
+        releaseUnusedGrants(imageUris, folderUris)
     }
 
     override suspend fun addWallpapersToAlbum(
@@ -86,13 +96,15 @@ class AlbumRepositoryImpl @Inject constructor(
         wallpapers: List<Wallpaper>,
         onProgress: (Int, Int) -> Unit
     ): Int {
-        var nextOrder = wallpaperDao.getMaxOrder(albumId) + 1
         val additions = wallpapers.groupBy { it.folderId }.flatMap { (folderId, images) ->
             // A folder can be removed while its provider scan is in flight.
             if (folderId != null && folderDao.getFolderById(folderId)?.albumId != albumId) {
                 emptyList()
             } else {
                 val existing = wallpaperDao.getUrisInCollection(albumId, folderId).toHashSet()
+                // New files join the end of their own group (direct images or one folder), so the
+                // rotation keeps direct images first and then each folder in its saved order.
+                var nextOrder = wallpaperDao.getMaxOrderInCollection(albumId, folderId) + 1
                 images.filter { existing.add(it.uri) }.map {
                     it.copy(albumId = albumId, displayOrder = nextOrder++)
                 }
@@ -149,43 +161,53 @@ class AlbumRepositoryImpl @Inject constructor(
         wallpaperIds: List<String>
     ): Result<Unit> = Result.runCatching {
         if (wallpaperIds.isEmpty()) return@runCatching
-        database.withTransaction {
+        val imageUris = database.withTransaction {
+            val uris = wallpaperIds.chunked(WALLPAPER_BATCH_SIZE).flatMap { wallpaperDao.getDirectUris(albumId, it) }
             wallpaperIds.chunked(WALLPAPER_BATCH_SIZE).forEach {
                 wallpaperDao.deleteAlbumWallpapers(albumId, it)
             }
             albumDao.updateAlbumModifiedTime(albumId, System.currentTimeMillis())
             folderDao.refreshFolderCovers(albumId)
             updateAlbumCoverIfNeeded(albumId)
+            uris
         }
+        releaseUnusedGrants(imageUris, emptyList())
     }
 
     override suspend fun removeFolderFromAlbum(albumId: String, folderId: String): Result<Unit> = Result.runCatching {
-        database.withTransaction {
+        val folderUri = database.withTransaction {
+            val uri = folderDao.getFolderById(folderId)?.takeIf { it.albumId == albumId }?.uri
             folderDao.deleteAlbumFolder(albumId, folderId)
             albumDao.updateAlbumModifiedTime(albumId, System.currentTimeMillis())
             updateAlbumCoverIfNeeded(albumId)
+            uri
         }
+        releaseUnusedGrants(emptyList(), listOfNotNull(folderUri))
     }
 
     override suspend fun deleteAllAlbums(): Result<Unit> = Result.runCatching {
         albumDao.deleteAllAlbums()
+        // Nothing references any file now, so every grant this app holds is unused.
+        withContext(NonCancellable) {
+            documents.persistedReadGrants().forEach { releaseGrant(it) }
+        }
     }
 
     override suspend fun pruneMissingEntries(albumId: String): Result<Int> = Result.runCatching {
-        val missingFolders = folderDao.getFoldersByAlbum(albumId)
-            .filter { documents.isMissing(it.uri, isTree = true) }.map { it.id }.toSet()
-        val missingImages = mutableListOf<String>()
+        val folders = folderDao.getFoldersByAlbum(albumId)
+        val missingFolders = folders.filter { documents.isMissing(it.uri, isTree = true) }.map { it.id }.toSet()
+        val missingImages = mutableListOf<Wallpaper>()
         var afterId: String? = null
         while (true) {
             val batch = wallpaperDao.getWallpapersByAlbumPage(albumId, WALLPAPER_BATCH_SIZE, afterId)
             if (batch.isEmpty()) break
             batch.filter { it.folderId !in missingFolders && documents.isMissing(it.uri) }
-                .mapTo(missingImages) { it.id }
+                .mapTo(missingImages) { it.toDomainModel() }
             afterId = batch.last().id
         }
-        database.withTransaction {
+        val removed = database.withTransaction {
             var removed = missingFolders.sumOf { folderDao.deleteAlbumFolder(albumId, it) }
-            missingImages.chunked(WALLPAPER_BATCH_SIZE).forEach {
+            missingImages.map { it.id }.chunked(WALLPAPER_BATCH_SIZE).forEach {
                 removed += wallpaperDao.deleteAlbumWallpapers(albumId, it)
             }
             if (removed > 0) {
@@ -194,6 +216,54 @@ class AlbumRepositoryImpl @Inject constructor(
                 albumDao.updateAlbumModifiedTime(albumId, System.currentTimeMillis())
             }
             removed
+        }
+        releaseUnusedGrants(
+            imageUris = missingImages.filter { it.folderId == null }.map { it.uri },
+            folderUris = folders.filter { it.id in missingFolders }.map { it.uri }
+        )
+        removed
+    }
+
+    override suspend fun syncAccess(albumId: String): Result<Int> = Result.runCatching {
+        val grants = documents.persistedReadGrants()
+        database.withTransaction {
+            val folders = folderDao.getFoldersByAlbum(albumId)
+            val images = wallpaperDao.getDirectAccess(albumId)
+            // An app that still has library entries never legitimately holds no grants at all;
+            // treat that as a failed read rather than marking every image unreadable.
+            if (grants.isEmpty() && (folders.isNotEmpty() || images.isNotEmpty())) {
+                Log.w(TAG, "No persisted grants reported; keeping the current access flags")
+                return@withTransaction 0
+            }
+            var changed = folders.sumOf { wallpaperDao.setFolderAccessLost(it.id, it.uri !in grants) }
+            val (lost, readable) = images.partition { it.uri !in grants }
+            lost.map { it.id }.chunked(WALLPAPER_BATCH_SIZE).forEach { changed += wallpaperDao.setAccessLost(it, true) }
+            readable.map { it.id }.chunked(WALLPAPER_BATCH_SIZE).forEach { changed += wallpaperDao.setAccessLost(it, false) }
+            changed
+        }
+    }
+
+    override suspend fun relinkWallpaper(wallpaperId: String, uri: String): Result<Unit> = Result.runCatching {
+        wallpaperDao.relink(wallpaperId, uri)
+    }
+
+    /**
+     * Give back grants that no album uses any more. Android lets an app keep only a limited number
+     * of persisted grants, so leaked ones eventually cost access to images that are still in use.
+     */
+    private suspend fun releaseUnusedGrants(imageUris: Collection<String>, folderUris: Collection<String>) =
+        withContext(NonCancellable) {
+            imageUris.toSet().filter { wallpaperDao.countDirectReferences(it) == 0 }.forEach { releaseGrant(it) }
+            folderUris.toSet().filter { folderDao.countReferences(it) == 0 }.forEach { releaseGrant(it) }
+        }
+
+    private suspend fun releaseGrant(uri: String) {
+        try {
+            documents.releaseReadPermission(uri)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not release the grant for $uri", e)
         }
     }
 

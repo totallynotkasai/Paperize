@@ -22,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.anthonyla.paperize.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -42,9 +44,11 @@ fun WallpaperItem(
     isSelectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    unavailable: Boolean = false
 ) {
     val context = LocalContext.current
+    val description = if (unavailable) stringResource(R.string.content_desc_unavailable, wallpaperName) else wallpaperName
 
     val transition = updateTransition(isSelected, label = "WallpaperItemSelection")
     val paddingTransition by transition.animateDp(label = "padding") { selected ->
@@ -58,7 +62,7 @@ fun WallpaperItem(
         modifier = modifier
             .padding(paddingTransition)
             .semantics {
-                contentDescription = wallpaperName
+                contentDescription = description
                 if (isSelectionMode) selected = isSelected
             }
             .combinedClickable(
@@ -84,8 +88,14 @@ fun WallpaperItem(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                alpha = if (isSelected) 0.7f else 1f
+                alpha = when {
+                    isSelected -> 0.7f
+                    unavailable -> UNAVAILABLE_ALPHA
+                    else -> 1f
+                }
             )
+
+            if (unavailable) UnavailableBadge(null, Modifier.align(Alignment.TopStart).padding(AppSpacing.small))
 
             if (isSelectionMode) {
                 Icon(

@@ -120,7 +120,7 @@ class LiveWallpaperShaderInstrumentedTest {
             val bitmap = solidBitmap(Color.WHITE)
             file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             bitmap.recycle()
-            val loader = ContentUriImageLoader(app.contentResolver, android.net.Uri.fromFile(file))
+            val loader = ContentUriImageLoader(app, android.net.Uri.fromFile(file))
             renderer.onSurfaceCreated(gl, config)
             renderer.onSurfaceChanged(gl, SIZE, SIZE)
             renderer.queueWallpaper(loader)
@@ -146,7 +146,7 @@ class LiveWallpaperShaderInstrumentedTest {
             val red = solidBitmap(Color.RED)
             replacement.outputStream().use { red.compress(Bitmap.CompressFormat.PNG, 100, it) }
             red.recycle()
-            renderer.queueWallpaper(ContentUriImageLoader(app.contentResolver, android.net.Uri.fromFile(replacement)))
+            renderer.queueWallpaper(ContentUriImageLoader(app, android.net.Uri.fromFile(replacement)))
             val uploadBeforeResize = checkNotNull(uploads.poll(5, java.util.concurrent.TimeUnit.SECONDS))
             renderer.onSurfaceChanged(gl, SIZE, SIZE - 2)
             uploadBeforeResize()

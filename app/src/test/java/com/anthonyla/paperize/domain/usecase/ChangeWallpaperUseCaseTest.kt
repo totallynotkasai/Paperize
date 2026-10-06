@@ -123,6 +123,16 @@ class ChangeWallpaperUseCaseTest {
         coVerify(exactly = 0) { renderer.render(any(), any(), any()) }
     }
 
+    @Test
+    fun `an album whose images all lost access keeps its selection`() = runTest {
+        coEvery { repository.getAndDequeueWallpaper("album", ScreenType.HOME) } returns null
+        coEvery { repository.ensureWallpaperQueue("album", ScreenType.HOME, any()) } returns Result.Success(Unit)
+        coEvery { repository.countWallpapers("album") } returns 3
+
+        // Not EmptyAlbumException, which would clear the album selection and turn changing off.
+        assertTrue((useCase("album", ScreenType.HOME) as Result.Error).exception is NoValidWallpaperException)
+    }
+
     private fun preparedWallpaper() = PreparedWallpaper(
         bitmap = mockk<Bitmap>(relaxed = true),
         albumId = "album",

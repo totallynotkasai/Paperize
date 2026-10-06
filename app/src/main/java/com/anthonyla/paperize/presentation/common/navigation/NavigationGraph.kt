@@ -105,9 +105,11 @@ fun NavigationGraph(
             )
         }
 
-        composable<AlbumRoute> {
+        composable<AlbumRoute> { backStackEntry ->
+            val route = backStackEntry.toRoute<AlbumRoute>()
             AlbumViewScreen(
                 onBackClick = { navController.popBackStack() },
+                onNavigateToReorder = { navController.navigate(SortRoute(route.albumId)) },
                 onNavigateToFolder = { folderId ->
                     navController.navigate(FolderRoute(folderId))
                 },

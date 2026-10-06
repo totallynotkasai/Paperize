@@ -1,7 +1,6 @@
 package com.anthonyla.paperize.service.wallpaper
 
 import android.app.Notification
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
@@ -18,6 +17,7 @@ import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
 import com.anthonyla.paperize.presentation.MainActivity
 import com.anthonyla.paperize.service.WallpaperChangeLock
+import com.anthonyla.paperize.service.WallpaperNotifier
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -37,15 +37,9 @@ class WallpaperChangeService : Service() {
     @Inject lateinit var wallpaperChangeLock: WallpaperChangeLock
     @Inject lateinit var wallpaperScheduler: WallpaperScheduler
     @Inject lateinit var wallpaperRepository: WallpaperRepository
+    @Inject lateinit var notifier: WallpaperNotifier
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private lateinit var notificationManager: NotificationManager
-
-    override fun onCreate() {
-        super.onCreate()
-        notificationManager = getSystemService(NotificationManager::class.java)
-            ?: error("NotificationManager not available")
-    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -99,7 +93,7 @@ class WallpaperChangeService : Service() {
                         }
                     val settings = settingsRepository.getScheduleSettings()
                     val outcome = wallpaperController.change(effectiveScreenType, settings)
-                    if (outcome.emptyAlbum) showEmptyAlbumNotification()
+                    if (outcome.emptyAlbum) notifier.showEmptyAlbum()
                     if (outcome.changed) {
                         wallpaperScheduler.resetAfterManualChange(
                             effectiveScreenType,
@@ -111,11 +105,7 @@ class WallpaperChangeService : Service() {
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error changing wallpaper", e)
-                    showErrorNotification(
-                        getString(R.string.app_name),
-                        e.localizedMessage
-                            ?: getString(R.string.error_no_valid_wallpaper_after_retries)
-                    )
+                    notifier.showChangeFailed(e.localizedMessage)
                 } finally {
                     stopSelf(startId)
                 }
@@ -156,10 +146,7 @@ class WallpaperChangeService : Service() {
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error applying selected wallpaper", e)
-                    showErrorNotification(
-                        getString(R.string.app_name),
-                        e.localizedMessage ?: getString(R.string.error_no_valid_wallpaper_after_retries)
-                    )
+                    notifier.showChangeFailed(e.localizedMessage)
                 } finally {
                     stopSelf(startId)
                 }
@@ -173,28 +160,17 @@ class WallpaperChangeService : Service() {
                 try {
                     val settings = settingsRepository.getScheduleSettings()
                     val outcome = wallpaperController.reapply(screenType, settings)
-                    if (outcome.emptyAlbum) showEmptyAlbumNotification()
+                    if (outcome.emptyAlbum) notifier.showEmptyAlbum()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.e(TAG, "Error reapplying effects", e)
-                    showErrorNotification(
-                        getString(R.string.app_name),
-                        e.localizedMessage
-                            ?: getString(R.string.error_no_valid_wallpaper_after_retries)
-                    )
+                    notifier.showChangeFailed(e.localizedMessage)
                 } finally {
                     stopSelf(startId)
                 }
             }
         }
-    }
-
-    private fun showEmptyAlbumNotification() {
-        showErrorNotification(
-            getString(R.string.no_wallpapers_in_album),
-            getString(R.string.wallpaper_changer_disabled_empty_album)
-        )
     }
 
     private fun createNotification(): Notification {
@@ -213,24 +189,6 @@ class WallpaperChangeService : Service() {
             .build()
     }
 
-    private fun showErrorNotification(title: String, message: String) {
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent().setClassName(packageName, MainActivity::class.java.name),
-            PendingIntent.FLAG_IMMUTABLE
-        )
-        val notification = NotificationCompat.Builder(this, Constants.NOTIFICATION_CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .build()
-        notificationManager.notify(ERROR_NOTIFICATION_ID, notification)
-    }
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
@@ -247,6 +205,5 @@ class WallpaperChangeService : Service() {
         const val ACTION_REAPPLY_EFFECTS = Constants.ACTION_REAPPLY_EFFECTS
         const val EXTRA_SCREEN_TYPE = Constants.EXTRA_SCREEN_TYPE
         const val EXTRA_WALLPAPER_ID = Constants.EXTRA_WALLPAPER_ID
-        private const val ERROR_NOTIFICATION_ID = Constants.NOTIFICATION_ID + 1
     }
 }

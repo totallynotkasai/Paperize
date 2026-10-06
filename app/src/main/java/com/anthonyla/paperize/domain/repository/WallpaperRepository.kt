@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 interface WallpaperRepository {
     suspend fun getWallpaperById(wallpaperId: String): Wallpaper?
 
+    /** Every image in the album, including ones that cannot rotate right now. */
+    suspend fun countWallpapers(albumId: String): Int
+
     suspend fun getNextWallpaperInQueue(albumId: String, screenType: ScreenType): Wallpaper?
 
     /**

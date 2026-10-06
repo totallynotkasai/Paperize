@@ -188,6 +188,15 @@ fun retrieveBitmap(
     scaling: ScalingType = ScalingType.FIT,
     preserveSourceOverflow: Boolean = false
 ): Bitmap? {
+    if (isSvgDocument(context, wallpaperUri)) {
+        val svg = decodeSvg(context, wallpaperUri, width, height, scaling) ?: return null
+        return if (preserveSourceOverflow && scaling == ScalingType.FILL) {
+            scaleToFillPreservingOverflow(svg, width, height)
+        } else {
+            finalizeToCanvas(svg, width, height, scaling)
+        }
+    }
+
     // ImageDecoder reports dimensions after applying EXIF orientation.
     var decodedWithImageDecoder = false
     val bitmap = try {

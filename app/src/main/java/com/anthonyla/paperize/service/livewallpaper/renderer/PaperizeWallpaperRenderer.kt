@@ -40,6 +40,9 @@ class PaperizeWallpaperRenderer(
     interface Callbacks {
         fun queueEventOnGlThread(event: () -> Unit): Boolean
         fun requestRender()
+
+        /** Called on the GL thread once [loader]'s image has been uploaded for display. */
+        fun onWallpaperShown(loader: ImageLoader) {}
     }
 
     private val surfaceSize = MutableStateFlow<Pair<Int, Int>?>(null)
@@ -460,7 +463,9 @@ class PaperizeWallpaperRenderer(
 
                     val queued = callbacks.queueEventOnGlThread {
                         if (loadGeneration.get() == generation) {
-                            uploadBitmap(bitmap, sourceBrightness, skipCrossfade)
+                            if (uploadBitmap(bitmap, sourceBrightness, skipCrossfade)) {
+                                callbacks.onWallpaperShown(imageLoader)
+                            }
                         } else {
                             bitmap.recycle()
                         }
@@ -477,13 +482,13 @@ class PaperizeWallpaperRenderer(
         }
     }
 
-    /** Consumes [bitmap] on the GL thread, then swaps or crossfades to it. */
+    /** Consumes [bitmap] on the GL thread, then swaps or crossfades to it. Returns whether it did. */
     private fun uploadBitmap(
         bitmap: Bitmap,
         sourceBrightness: Float,
         skipCrossfade: Boolean = false
-    ) {
-        try {
+    ): Boolean {
+        return try {
             val picture = GLPicture(bitmap, sourceBrightness)
 
             if (skipCrossfade) {
@@ -503,8 +508,10 @@ class PaperizeWallpaperRenderer(
             }
 
             callbacks.requestRender()
+            true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to upload bitmap to GPU", e)
+            false
         } finally {
             bitmap.recycle()
         }

@@ -7,6 +7,18 @@ import androidx.room.Query
 import androidx.room.Update
 import com.anthonyla.paperize.data.database.entities.WallpaperEntity
 
+/** A directly added image and whether it was last seen without a covering grant. */
+data class DirectWallpaperAccess(val id: String, val uri: String, val accessLost: Boolean)
+
+/**
+ * Rotation order: images added directly first, then each folder in its saved order. Image order
+ * only has to be consistent within its own group, so new files can join the end of their group.
+ */
+private const val ROTATION_ORDER = "w.folderId IS NOT NULL, f.displayOrder, f.id, w.displayOrder, w.id"
+
+/** Images that may rotate: still readable and not excluded by the user. */
+private const val ELIGIBLE = "w.accessLost = 0 AND w.excluded = 0"
+
 @Dao
 interface WallpaperDao {
     @Query("DELETE FROM wallpapers WHERE albumId = :albumId AND id IN (:ids)")
@@ -15,13 +27,17 @@ interface WallpaperDao {
     @Query("SELECT uri FROM wallpapers WHERE albumId = :albumId AND folderId IS :folderId")
     suspend fun getUrisInCollection(albumId: String, folderId: String?): List<String>
 
-    @Query("SELECT COALESCE(MAX(displayOrder), -1) FROM wallpapers WHERE albumId = :albumId")
-    suspend fun getMaxOrder(albumId: String): Int
+    /** The highest order among direct images ([folderId] null) or within one folder. */
+    @Query("SELECT COALESCE(MAX(displayOrder), -1) FROM wallpapers WHERE albumId = :albumId AND folderId IS :folderId")
+    suspend fun getMaxOrderInCollection(albumId: String, folderId: String?): Int
 
     @Query("SELECT * FROM wallpapers WHERE albumId = :albumId AND (:afterId IS NULL OR id > :afterId) ORDER BY id LIMIT :limit")
     suspend fun getWallpapersByAlbumPage(albumId: String, limit: Int, afterId: String?): List<WallpaperEntity>
 
-    @Query("SELECT uri FROM wallpapers WHERE albumId = :albumId ORDER BY folderId IS NOT NULL, displayOrder, id LIMIT 1")
+    @Query("""
+        SELECT w.uri FROM wallpapers w LEFT JOIN folders f ON f.id = w.folderId
+        WHERE w.albumId = :albumId ORDER BY $ROTATION_ORDER LIMIT 1
+    """)
     suspend fun getAlbumCoverUri(albumId: String): String?
 
     @Query("SELECT uri FROM wallpapers WHERE folderId = :folderId ORDER BY displayOrder, id LIMIT 1")
@@ -48,9 +64,35 @@ interface WallpaperDao {
     @Query("SELECT COUNT(*) FROM wallpapers WHERE albumId = :albumId")
     suspend fun getWallpaperCountByAlbum(albumId: String): Int
 
-    @Query("SELECT id FROM wallpapers WHERE albumId = :albumId")
+    @Query("SELECT w.id FROM wallpapers w WHERE w.albumId = :albumId AND $ELIGIBLE")
     suspend fun getWallpaperIdsByAlbum(albumId: String): List<String>
 
-    @Query("SELECT id FROM wallpapers WHERE albumId = :albumId ORDER BY displayOrder, id")
+    @Query("""
+        SELECT w.id FROM wallpapers w LEFT JOIN folders f ON f.id = w.folderId
+        WHERE w.albumId = :albumId AND $ELIGIBLE ORDER BY $ROTATION_ORDER
+    """)
     suspend fun getOrderedWallpaperIdsByAlbum(albumId: String): List<String>
+
+    /** Directly added images hold their own grant; folder images use their folder's grant. */
+    @Query("SELECT uri FROM wallpapers WHERE albumId = :albumId AND folderId IS NULL")
+    suspend fun getDirectUris(albumId: String): List<String>
+
+    @Query("SELECT uri FROM wallpapers WHERE albumId = :albumId AND folderId IS NULL AND id IN (:ids)")
+    suspend fun getDirectUris(albumId: String, ids: List<String>): List<String>
+
+    /** Counts every album's direct images, because albums can share one granted file. */
+    @Query("SELECT COUNT(*) FROM wallpapers WHERE uri = :uri AND folderId IS NULL")
+    suspend fun countDirectReferences(uri: String): Int
+
+    @Query("SELECT id, uri, accessLost FROM wallpapers WHERE albumId = :albumId AND folderId IS NULL")
+    suspend fun getDirectAccess(albumId: String): List<DirectWallpaperAccess>
+
+    @Query("UPDATE wallpapers SET accessLost = :lost WHERE id IN (:ids) AND accessLost != :lost")
+    suspend fun setAccessLost(ids: List<String>, lost: Boolean): Int
+
+    @Query("UPDATE wallpapers SET accessLost = :lost WHERE folderId = :folderId AND accessLost != :lost")
+    suspend fun setFolderAccessLost(folderId: String, lost: Boolean): Int
+
+    @Query("UPDATE wallpapers SET uri = :uri, accessLost = 0 WHERE id = :wallpaperId")
+    suspend fun relink(wallpaperId: String, uri: String)
 }

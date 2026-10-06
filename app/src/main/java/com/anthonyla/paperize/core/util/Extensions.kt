@@ -5,7 +5,6 @@ import android.content.Context
 import android.net.Uri
 import android.os.CancellationSignal
 import android.provider.DocumentsContract
-import com.anthonyla.paperize.core.constants.Constants
 import android.database.Cursor
 import java.io.IOException
 import java.util.UUID
@@ -73,8 +72,13 @@ data class ScannedImage(
  * Traverses directories iteratively, querying metadata once per directory.
  * Rejects incomplete provider results and cancels in-flight queries with the caller.
  * [onProgress] reports every [PROGRESS_REPORT_INTERVAL] discoveries and on completion.
+ * [onSkipped] reports, once at the end, how many images were left out because of their format.
  */
-suspend fun Uri.scanFolderImages(context: Context, onProgress: ((found: Int) -> Unit)? = null): List<ScannedImage> {
+suspend fun Uri.scanFolderImages(
+    context: Context,
+    onProgress: ((found: Int) -> Unit)? = null,
+    onSkipped: ((unsupported: Int) -> Unit)? = null
+): List<ScannedImage> {
     val rootDocumentId = DocumentsContract.getTreeDocumentId(this)
 
     val projection = arrayOf(
@@ -85,6 +89,7 @@ suspend fun Uri.scanFolderImages(context: Context, onProgress: ((found: Int) -> 
     )
 
     val results = mutableListOf<ScannedImage>()
+    var skipped = 0
     var lastReported = 0
     val pendingDirs = ArrayDeque<String>()
     val visitedDocuments = mutableSetOf(rootDocumentId)
@@ -120,8 +125,10 @@ suspend fun Uri.scanFolderImages(context: Context, onProgress: ((found: Int) -> 
                     pendingDirs.addLast(documentId)
                 } else {
                     val name = cursor.getString(nameColumn) ?: continue
-                    val extension = name.substringAfterLast('.', "").lowercase()
-                    if (extension in Constants.SUPPORTED_IMAGE_EXTENSIONS) {
+                    val mimeType = cursor.getString(mimeColumn)
+                    if (!SupportedImageFormats.isSupported(name, mimeType)) {
+                        if (SupportedImageFormats.isImage(name, mimeType)) skipped++
+                    } else {
                         results.add(
                             ScannedImage(
                                 uri = DocumentsContract.buildDocumentUriUsingTree(this, documentId),
@@ -139,6 +146,7 @@ suspend fun Uri.scanFolderImages(context: Context, onProgress: ((found: Int) -> 
         }
     }
     onProgress?.invoke(results.size)
+    onSkipped?.invoke(skipped)
     return results
 }
 

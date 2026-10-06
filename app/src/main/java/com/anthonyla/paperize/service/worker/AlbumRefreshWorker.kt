@@ -37,6 +37,11 @@ class AlbumRefreshWorker @AssistedInject constructor(
             var failedCount = 0
 
             albums.forEach { album ->
+                // Flag images whose file grant is gone, so the album can ask for access again.
+                albumRepository.syncAccess(album.id).let { result ->
+                    if (result is CoreResult.Error) Log.e(TAG, "Error checking access for '${album.name}'", result.exception)
+                }
+
                 when (val result = albumRepository.pruneMissingEntries(album.id)) {
                     is CoreResult.Success -> {
                         val removedCount = result.data

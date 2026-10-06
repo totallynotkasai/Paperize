@@ -73,4 +73,24 @@ class WallpaperSchedulingPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `jobs follow the album selection that an empty album cleared`() {
+        val settings = ScheduleSettings(
+            enableChanger = true, separateSchedules = true, homeEnabled = true, lockEnabled = true,
+            homeAlbumId = "home", lockAlbumId = "lock"
+        )
+        assertEquals(setOf(ScreenType.HOME, ScreenType.LOCK), scheduledScreens(settings, WallpaperMode.STATIC))
+        assertEquals(setOf(ScreenType.LOCK), scheduledScreens(settings.copy(homeEnabled = false, homeAlbumId = null), WallpaperMode.STATIC))
+        // An enabled screen without an album stops every job until plan item 2.1 changes this.
+        assertEquals(emptySet<ScreenType>(), scheduledScreens(settings.copy(homeAlbumId = null), WallpaperMode.STATIC))
+        assertEquals(emptySet<ScreenType>(), scheduledScreens(settings.copy(enableChanger = false), WallpaperMode.STATIC))
+    }
+
+    @Test
+    fun `short live intervals run in the engine instead of a job`() {
+        val settings = ScheduleSettings(enableChanger = true, liveAlbumId = "live", liveIntervalMinutes = 5)
+        assertEquals(emptySet<ScreenType>(), scheduledScreens(settings, WallpaperMode.LIVE))
+        assertEquals(setOf(ScreenType.LIVE), scheduledScreens(settings.copy(liveIntervalMinutes = 30), WallpaperMode.LIVE))
+    }
 }

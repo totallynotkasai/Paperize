@@ -62,7 +62,7 @@ fun FolderViewScreen(
     }
 
     var showSortSheet by rememberSaveable { mutableStateOf(false) }
-    var sortOption by rememberSaveable { mutableStateOf(SortOption.DATE_ADDED_DESC) }
+    var sortOption by rememberSaveable { mutableStateOf(SortOption.ROTATION) }
 
     val sortedWallpapers = remember(wallpapers, sortOption) {
         wallpapers.sortedWith(sortOption.wallpaperComparator)
@@ -112,6 +112,7 @@ fun FolderViewScreen(
                                 )
                             },
                             onLongClick = null,
+                            unavailable = wallpaper.accessLost,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(Constants.WALLPAPER_ASPECT_RATIO)

@@ -40,3 +40,20 @@ val LIBRARY_MIGRATIONS: Array<Migration> = (1..3).map { version ->
         }
     }
 }.toTypedArray()
+
+/**
+ * Version 5 adds every column the fork's plan needs, so later phases need no schema change:
+ * per-image exclude, favourite and lost-access flags, and per-album effects and favourites mode.
+ */
+val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `wallpapers` ADD COLUMN `excluded` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `wallpapers` ADD COLUMN `favorite` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `wallpapers` ADD COLUMN `accessLost` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `albums` ADD COLUMN `effects` TEXT")
+        db.execSQL("ALTER TABLE `albums` ADD COLUMN `favoritesMode` TEXT NOT NULL DEFAULT 'MARKER_ONLY'")
+    }
+}
+
+/** Every supported upgrade path, in the order Room should chain them. */
+val ALL_MIGRATIONS: Array<Migration> = LIBRARY_MIGRATIONS + MIGRATION_4_5

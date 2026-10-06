@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -31,15 +33,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import android.net.Uri
+import android.provider.DocumentsContract
+import androidx.core.net.toUri
 import com.anthonyla.paperize.R
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.anthonyla.paperize.core.constants.Constants
+import com.anthonyla.paperize.domain.model.Folder
+import com.anthonyla.paperize.domain.model.Wallpaper
 import com.anthonyla.paperize.presentation.common.components.AddAlbumAnimatedFab
 import com.anthonyla.paperize.presentation.common.components.EmptyCollection
+import com.anthonyla.paperize.presentation.common.util.UiText
+import com.anthonyla.paperize.presentation.common.util.asString
+import com.anthonyla.paperize.presentation.screens.album_view.components.AccessBanner
 import com.anthonyla.paperize.presentation.screens.album_view.components.AlbumViewTopBar
 import com.anthonyla.paperize.presentation.screens.album_view.components.FolderItem
+import com.anthonyla.paperize.presentation.screens.album_view.components.GrantNoticeDialog
 import com.anthonyla.paperize.presentation.screens.album_view.components.ImportProgressDialog
 import com.anthonyla.paperize.presentation.screens.album_view.components.SortBottomSheet
 import com.anthonyla.paperize.presentation.screens.album_view.components.SortOption
@@ -52,6 +63,7 @@ fun AlbumViewScreen(
     onBackClick: () -> Unit,
     onNavigateToFolder: (String) -> Unit,
     onNavigateToWallpaperView: (String, String, String) -> Unit,
+    onNavigateToReorder: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: AlbumViewViewModel = hiltViewModel()
 ) {
@@ -66,14 +78,17 @@ fun AlbumViewScreen(
     val isSelectionMode = selectedWallpapers.isNotEmpty() || selectedFolders.isNotEmpty()
     val importProgress by viewModel.importProgress.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val grantNotice by viewModel.grantNotice.collectAsStateWithLifecycle()
+    val accessIssues by viewModel.accessIssues.collectAsStateWithLifecycle()
     val isDeleting by viewModel.isDeleting.collectAsStateWithLifecycle()
     val albumDeleted by viewModel.albumDeleted.collectAsStateWithLifecycle()
     var showDeleteAlbumDialog by rememberSaveable { mutableStateOf(false) }
+    var showRemoveUnavailableDialog by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val messageText = message?.let { stringResource(it) }
+    val messageText = message?.asString()
     LaunchedEffect(messageText) {
         messageText?.let {
-            if (message == R.string.delete_album_failed) showDeleteAlbumDialog = false
+            if (message == UiText.Resource(R.string.delete_album_failed)) showDeleteAlbumDialog = false
             snackbarHostState.showSnackbar(it)
             viewModel.dismissMessage()
         }
@@ -88,7 +103,7 @@ fun AlbumViewScreen(
 
     var showSortSheet by rememberSaveable { mutableStateOf(false) }
     var showDeleteSelectedDialog by rememberSaveable { mutableStateOf(false) }
-    var sortOption by rememberSaveable { mutableStateOf(SortOption.DATE_ADDED_DESC) }
+    var sortOption by rememberSaveable { mutableStateOf(SortOption.ROTATION) }
 
     BackHandler(enabled = isSelectionMode) {
         viewModel.clearSelection()
@@ -96,6 +111,7 @@ fun AlbumViewScreen(
 
     val sortedFolders = remember(folders, sortOption) {
         when (sortOption) {
+            SortOption.ROTATION -> folders.sortedWith(compareBy<Folder> { it.displayOrder }.thenBy { it.id })
             SortOption.NAME_ASC -> folders.sortedBy { it.name.lowercase() }
             SortOption.NAME_DESC -> folders.sortedByDescending { it.name.lowercase() }
             SortOption.DATE_ADDED_ASC -> folders.sortedBy { it.addedAt }
@@ -108,6 +124,8 @@ fun AlbumViewScreen(
     val sortedWallpapers = remember(wallpapers, sortOption) {
         wallpapers.sortedWith(sortOption.wallpaperComparator)
     }
+
+    val unavailableFolderIds = remember(accessIssues) { accessIssues.unavailableFolders.map { it.id }.toSet() }
 
     val commonItemModifier = remember {
         Modifier
@@ -127,6 +145,27 @@ fun AlbumViewScreen(
         uri?.let { viewModel.addFolder(it.toString()) }
     }
 
+    val restoreImagesLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<Uri> ->
+        viewModel.restoreImageAccess(uris.map { it.toString() })
+    }
+
+    val restoreFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.restoreFolderAccess(it.toString()) }
+    }
+
+    val grantAccess: () -> Unit = {
+        val folder = accessIssues.unavailableFolders.firstOrNull()
+        if (folder != null) {
+            restoreFolderLauncher.launch(folder.pickerStartLocation())
+        } else {
+            restoreImagesLauncher.launch(arrayOf("image/*"))
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -137,6 +176,7 @@ fun AlbumViewScreen(
                 allSelected = allSelected,
                 onBackClick = onBackClick,
                 onSortClick = { showSortSheet = true },
+                onReorderClick = onNavigateToReorder,
                 onDeleteAlbum = { showDeleteAlbumDialog = true },
                 onSelectAll = { if (allSelected) viewModel.clearSelection() else viewModel.selectAll() },
                 onDeleteSelected = { if (!isDeleting) showDeleteSelectedDialog = true },
@@ -168,16 +208,11 @@ fun AlbumViewScreen(
             }
             return@Scaffold
         }
-        LazyVerticalGrid(
-            state = lazyListState,
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            columns = GridCells.Adaptive(AppGrid.itemMinSize),
-            contentPadding = PaddingValues(AppSpacing.gridPadding),
-            horizontalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing),
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing)
-        ) {
+        val itemPlacement = tween<androidx.compose.ui.unit.IntOffset>(
+            durationMillis = Constants.ANIMATION_DURATION_LONG_MS,
+            easing = FastOutSlowInEasing
+        )
+        val folderItems: LazyGridScope.() -> Unit = {
             items(
                 items = sortedFolders,
                 key = { folder -> "folder-${folder.id}" }
@@ -196,20 +231,16 @@ fun AlbumViewScreen(
                     onLongClick = {
                         viewModel.toggleFolderSelection(folder.id)
                     },
-                    modifier = commonItemModifier
-                        .animateItem(
-                            placementSpec = tween(
-                                durationMillis = Constants.ANIMATION_DURATION_LONG_MS,
-                                easing = FastOutSlowInEasing
-                            )
-                        )
+                    unavailable = folder.id in unavailableFolderIds,
+                    modifier = commonItemModifier.animateItem(placementSpec = itemPlacement)
                 )
             }
-
+        }
+        val wallpaperItems: LazyGridScope.() -> Unit = {
             items(
                 items = sortedWallpapers,
                 key = { wallpaper -> "wallpaper-${wallpaper.id}" }
-            ) { wallpaper ->
+            ) { wallpaper: Wallpaper ->
                 WallpaperItem(
                     wallpaperUri = wallpaper.uri,
                     wallpaperName = wallpaper.displayFileName,
@@ -229,14 +260,38 @@ fun AlbumViewScreen(
                     onLongClick = {
                         viewModel.toggleWallpaperSelection(wallpaper.id)
                     },
-                    modifier = commonItemModifier
-                        .animateItem(
-                            placementSpec = tween(
-                                durationMillis = Constants.ANIMATION_DURATION_LONG_MS,
-                                easing = FastOutSlowInEasing
-                            )
-                        )
+                    unavailable = wallpaper.accessLost,
+                    modifier = commonItemModifier.animateItem(placementSpec = itemPlacement)
                 )
+            }
+        }
+        LazyVerticalGrid(
+            state = lazyListState,
+            modifier = modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            columns = GridCells.Adaptive(AppGrid.itemMinSize),
+            contentPadding = PaddingValues(AppSpacing.gridPadding),
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing)
+        ) {
+            if (accessIssues.unavailableImages > 0 && !isSelectionMode) {
+                item(key = "access-banner", span = { GridItemSpan(maxLineSpan) }) {
+                    AccessBanner(
+                        issues = accessIssues,
+                        onGrantAccess = grantAccess,
+                        onRemove = { showRemoveUnavailableDialog = true }
+                    )
+                }
+            }
+            // Rotation order lists images in the order they change in: direct images first,
+            // then each folder in turn.
+            if (sortOption == SortOption.ROTATION) {
+                wallpaperItems()
+                folderItems()
+            } else {
+                folderItems()
+                wallpaperItems()
             }
         }
     }
@@ -251,6 +306,14 @@ fun AlbumViewScreen(
 
     ImportProgressDialog(progress = importProgress, onCancel = viewModel::cancelImport)
 
+    grantNotice?.let { notice ->
+        GrantNoticeDialog(
+            notice = notice,
+            onAddFolder = { folderPickerLauncher.launch(null) },
+            onDismiss = viewModel::dismissGrantNotice
+        )
+    }
+
     if (showDeleteSelectedDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteSelectedDialog = false },
@@ -264,6 +327,31 @@ fun AlbumViewScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteSelectedDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showRemoveUnavailableDialog) {
+        AlertDialog(
+            onDismissRequest = { showRemoveUnavailableDialog = false },
+            title = {
+                Text(
+                    pluralStringResource(
+                        R.plurals.remove_unavailable_title, accessIssues.unavailableImages, accessIssues.unavailableImages
+                    )
+                )
+            },
+            text = { Text(stringResource(R.string.remove_selected_hint)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRemoveUnavailableDialog = false
+                    viewModel.removeUnavailable()
+                }) { Text(stringResource(R.string.confirm)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveUnavailableDialog = false }) {
                     Text(stringResource(R.string.cancel))
                 }
             }
@@ -290,4 +378,12 @@ fun AlbumViewScreen(
             }
         )
     }
+}
+
+/** Opens the folder picker at the folder that needs access again, when the provider allows it. */
+private fun Folder.pickerStartLocation(): Uri? = try {
+    val tree = uri.toUri()
+    DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+} catch (_: IllegalArgumentException) {
+    null
 }

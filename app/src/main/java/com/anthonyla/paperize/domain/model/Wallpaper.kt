@@ -14,7 +14,11 @@ data class Wallpaper(
     val displayOrder: Int = 0,
     val sourceType: WallpaperSourceType = WallpaperSourceType.DIRECT,
     val addedAt: Long = System.currentTimeMillis(),
-    val mediaType: WallpaperMediaType = WallpaperMediaType.IMAGE
+    val mediaType: WallpaperMediaType = WallpaperMediaType.IMAGE,
+    val excluded: Boolean = false,
+    val favorite: Boolean = false,
+    /** Paperize can no longer read this image until access is granted again. */
+    val accessLost: Boolean = false
 ) {
     val displayFileName: String
         get() = Uri.decode(fileName).let { decoded ->

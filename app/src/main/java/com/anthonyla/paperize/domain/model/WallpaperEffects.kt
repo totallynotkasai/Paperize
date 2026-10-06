@@ -1,7 +1,10 @@
 package com.anthonyla.paperize.domain.model
 
 import com.anthonyla.paperize.core.constants.Constants
+import kotlinx.serialization.Serializable
 
+/** Also stored as JSON for per-album effects, so renamed properties need a migration. */
+@Serializable
 data class WallpaperEffects(
     val enableBlur: Boolean = false,
     val blurPercentage: Int = Constants.DEFAULT_BLUR_PERCENTAGE,

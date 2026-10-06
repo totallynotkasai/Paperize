@@ -21,7 +21,7 @@ class LibraryMigrationInstrumentedTest {
             try {
                 createLegacyDatabase(name, version)
                 val db = Room.databaseBuilder(context, PaperizeDatabase::class.java, name)
-                    .addMigrations(*LIBRARY_MIGRATIONS).build()
+                    .addMigrations(*ALL_MIGRATIONS).build()
                 try {
                     assertEquals("My album", db.albumDao().getAlbumById("album")?.name)
                     assertEquals("content://image", db.albumDao().getAlbumById("album")?.coverUri)

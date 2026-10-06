@@ -13,7 +13,10 @@ fun WallpaperEntity.toDomainModel(): Wallpaper = Wallpaper(
     displayOrder = displayOrder,
     sourceType = sourceType,
     addedAt = addedAt,
-    mediaType = mediaType
+    mediaType = mediaType,
+    excluded = excluded,
+    favorite = favorite,
+    accessLost = accessLost
 )
 
 fun Wallpaper.toEntity(): WallpaperEntity = WallpaperEntity(
@@ -26,5 +29,8 @@ fun Wallpaper.toEntity(): WallpaperEntity = WallpaperEntity(
     displayOrder = displayOrder,
     sourceType = sourceType,
     addedAt = addedAt,
-    mediaType = mediaType
+    mediaType = mediaType,
+    excluded = excluded,
+    favorite = favorite,
+    accessLost = accessLost
 )

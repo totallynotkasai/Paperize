@@ -17,6 +17,10 @@ interface FolderDao {
     @Query("DELETE FROM folders WHERE id = :folderId AND albumId = :albumId")
     suspend fun deleteAlbumFolder(albumId: String, folderId: String): Int
 
+    /** Counts every album's folders, because albums can share one granted folder. */
+    @Query("SELECT COUNT(*) FROM folders WHERE uri = :uri")
+    suspend fun countReferences(uri: String): Int
+
     @Query("SELECT EXISTS(SELECT 1 FROM folders WHERE albumId = :albumId AND uri = :uri)")
     suspend fun containsUri(albumId: String, uri: String): Boolean
 

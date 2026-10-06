@@ -21,7 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
+import com.anthonyla.paperize.R
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,7 +39,8 @@ fun FolderItem(
     isSelectionMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    unavailable: Boolean = false
 ) {
     val transition = updateTransition(isSelected, label = "FolderItemSelection")
     val paddingTransition by transition.animateDp(label = "padding") { selected ->
@@ -72,12 +75,21 @@ fun FolderItem(
                 imageVector = Icons.Default.Folder,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(0.5f),
-                tint = if (isSelected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                } else {
-                    MaterialTheme.colorScheme.primary
-                }
+                tint = MaterialTheme.colorScheme.primary.copy(
+                    alpha = when {
+                        isSelected -> 0.7f
+                        unavailable -> UNAVAILABLE_ALPHA
+                        else -> 1f
+                    }
+                )
             )
+
+            if (unavailable) {
+                UnavailableBadge(
+                    stringResource(R.string.unavailable),
+                    Modifier.align(Alignment.TopStart).padding(AppSpacing.small)
+                )
+            }
             Text(
                 text = folder.displayName,
                 style = MaterialTheme.typography.labelSmall,

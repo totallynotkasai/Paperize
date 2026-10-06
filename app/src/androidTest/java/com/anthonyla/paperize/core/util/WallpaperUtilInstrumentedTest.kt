@@ -39,8 +39,8 @@ class WallpaperUtilInstrumentedTest {
         val uri = Uri.fromFile(image)
         for (scaling in listOf(ScalingType.FIT, ScalingType.NONE)) {
             val live = com.anthonyla.paperize.service.livewallpaper.renderer.ContentUriImageLoader(
-                context.contentResolver, uri, scaling
-            ).load(20, 20)
+                context, uri, scaling
+            ).decode(20, 20)
             assertNotNull(live)
             assertEquals(1, live?.width)
             assertEquals(if (scaling == ScalingType.FIT) 20 else 40, live?.height)

@@ -26,6 +26,9 @@ class WallpaperRepositoryImpl @Inject constructor(
     override suspend fun getWallpaperById(wallpaperId: String): Wallpaper? =
         wallpaperDao.getWallpaperById(wallpaperId)?.toDomainModel()
 
+    override suspend fun countWallpapers(albumId: String): Int =
+        wallpaperDao.getWallpaperCountByAlbum(albumId)
+
     override suspend fun getNextWallpaperInQueue(albumId: String, screenType: ScreenType): Wallpaper? =
         wallpaperQueueDao.getNextWallpaperInQueue(albumId, screenType)?.toDomainModel()
 

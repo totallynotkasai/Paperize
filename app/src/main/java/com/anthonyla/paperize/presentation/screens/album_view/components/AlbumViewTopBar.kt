@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +27,7 @@ fun AlbumViewTopBar(
     allSelected: Boolean,
     onBackClick: () -> Unit,
     onSortClick: () -> Unit,
+    onReorderClick: () -> Unit,
     onDeleteAlbum: () -> Unit,
     onSelectAll: () -> Unit,
     onDeleteSelected: () -> Unit,
@@ -81,6 +83,12 @@ fun AlbumViewTopBar(
                 }
             },
             actions = {
+                IconButton(onClick = onReorderClick) {
+                    Icon(
+                        imageVector = Icons.Default.SwapVert,
+                        contentDescription = stringResource(R.string.reorder)
+                    )
+                }
                 IconButton(onClick = onSortClick) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Sort,

@@ -11,6 +11,9 @@ import com.anthonyla.paperize.data.database.entities.AlbumEntity
 import com.anthonyla.paperize.data.mapper.toEntity
 import com.anthonyla.paperize.domain.model.Folder
 import com.anthonyla.paperize.domain.model.Wallpaper
+import com.anthonyla.paperize.domain.source.DocumentSource
+import com.anthonyla.paperize.domain.source.SourceFolder
+import com.anthonyla.paperize.domain.source.SourceImage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -149,5 +152,89 @@ class AlbumRepositoryInstrumentedTest {
         wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)
         wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, true).getOrThrow()
         assertEquals(expected.drop(1), db.wallpaperQueueDao().getQueueItems("album", ScreenType.HOME).map { it.wallpaperId })
+    }
+
+    /** Records grant changes instead of touching the system's real grants. */
+    private class FakeDocumentSource(val grants: MutableSet<String> = mutableSetOf()) : DocumentSource {
+        val released = mutableListOf<String>()
+        override suspend fun retainReadPermission(uri: String) { grants += uri }
+        override suspend fun releaseReadPermission(uri: String) { released += uri; grants -= uri }
+        override suspend fun persistedReadGrants(): Set<String> = grants.toSet()
+        override suspend fun readImage(uri: String) = SourceImage(uri, uri.substringAfterLast('/'), 0L)
+        override suspend fun readFolder(uri: String, onProgress: (Int) -> Unit) = SourceFolder("folder", emptyList())
+        override suspend fun isMissing(uri: String, isTree: Boolean) = false
+    }
+
+    private fun image(id: String, folderId: String? = null, album: String = "album") =
+        Wallpaper.empty(id, album).copy(uri = "content://$id", folderId = folderId)
+
+    @Test fun newFilesJoinTheEndOfTheirOwnGroup() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        albums.addWallpapersToAlbum("album", listOf(image("d1"), image("d2"))).getOrThrow()
+        albums.addFolderToAlbum("album", Folder.empty("f1", "album").copy(uri = "content://tree1", wallpapers = listOf(image("f1a"), image("f1b")))).getOrThrow()
+        albums.addFolderToAlbum("album", Folder.empty("f2", "album").copy(uri = "content://tree2", wallpapers = listOf(image("f2a")))).getOrThrow()
+
+        albums.addWallpapersToAlbum("album", listOf(image("d3"), image("f1c", folderId = "f1"))).getOrThrow()
+
+        assertEquals(
+            listOf("d1", "d2", "d3", "f1a", "f1b", "f1c", "f2a"),
+            db.wallpaperDao().getOrderedWallpaperIdsByAlbum("album")
+        )
+    }
+
+    @Test fun deletingReleasesOnlyGrantsNoAlbumStillUses() = runBlocking {
+        val documents = FakeDocumentSource()
+        val tracked = AlbumRepositoryImpl(documents, db)
+        db.albumDao().insertAlbum(AlbumEntity("one", "One", null))
+        db.albumDao().insertAlbum(AlbumEntity("two", "Two", null))
+        tracked.addWallpapersToAlbum("one", listOf(image("shared", album = "one"), image("only-one", album = "one"))).getOrThrow()
+        tracked.addWallpapersToAlbum("two", listOf(image("shared", album = "two").copy(id = "shared-2"))).getOrThrow()
+        tracked.addFolderToAlbum("one", Folder.empty("tree-one", "one").copy(uri = "content://tree", wallpapers = listOf(image("in-tree", "tree-one", "one")))).getOrThrow()
+        tracked.addFolderToAlbum("two", Folder.empty("tree-two", "two").copy(uri = "content://tree")).getOrThrow()
+
+        tracked.removeWallpapersFromAlbum("one", listOf("only-one")).getOrThrow()
+        assertEquals(listOf("content://only-one"), documents.released)
+
+        tracked.deleteAlbum("one").getOrThrow()
+        // Album two still uses the shared image and the shared folder.
+        assertEquals(listOf("content://only-one"), documents.released)
+
+        tracked.removeFolderFromAlbum("two", "tree-two").getOrThrow()
+        tracked.deleteAlbum("two").getOrThrow()
+        assertEquals(listOf("content://only-one", "content://tree", "content://shared"), documents.released)
+    }
+
+    @Test fun lostGrantsAreFlaggedAndSkippedUntilAccessReturns() = runBlocking {
+        val documents = FakeDocumentSource(mutableSetOf("content://direct", "content://tree"))
+        val tracked = AlbumRepositoryImpl(documents, db)
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        tracked.addWallpapersToAlbum("album", listOf(image("direct"), image("other"))).getOrThrow()
+        tracked.addFolderToAlbum("album", Folder.empty("folder", "album").copy(uri = "content://tree", wallpapers = listOf(image("in-folder")))).getOrThrow()
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
+
+        // "other" never had a grant; the folder's grant covers its image.
+        assertEquals(1, tracked.syncAccess("album").getOrThrow())
+        assertTrue(db.wallpaperDao().getWallpaperById("other")!!.accessLost)
+        assertFalse(db.wallpaperDao().getWallpaperById("in-folder")!!.accessLost)
+
+        documents.grants -= "content://tree"
+        assertEquals(1, tracked.syncAccess("album").getOrThrow())
+        assertTrue(db.wallpaperDao().getWallpaperById("in-folder")!!.accessLost)
+        assertEquals("direct", wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)?.id)
+        // Only unreadable images remain queued, so the queue reports empty and is rebuilt.
+        assertNull(wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME))
+        assertEquals(3, wallpapers.countWallpapers("album"))
+
+        documents.grants += setOf("content://tree", "content://other")
+        assertEquals(2, tracked.syncAccess("album").getOrThrow())
+        assertEquals("other", wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)?.id)
+    }
+
+    @Test fun anEmptyGrantListIsNotTrustedWhileTheLibraryHasEntries() = runBlocking {
+        val tracked = AlbumRepositoryImpl(FakeDocumentSource(), db)
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        tracked.addWallpapersToAlbum("album", listOf(image("direct"))).getOrThrow()
+        assertEquals(0, tracked.syncAccess("album").getOrThrow())
+        assertFalse(db.wallpaperDao().getWallpaperById("direct")!!.accessLost)
     }
 }

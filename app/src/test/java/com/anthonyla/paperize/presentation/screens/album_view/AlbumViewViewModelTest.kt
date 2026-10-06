@@ -10,7 +10,10 @@ import com.anthonyla.paperize.core.Result
 import com.anthonyla.paperize.domain.model.Album
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.usecase.DeleteAlbumUseCase
+import com.anthonyla.paperize.domain.usecase.GrantLimitException
+import com.anthonyla.paperize.domain.usecase.ImportResult
 import com.anthonyla.paperize.domain.usecase.ImportWallpapersUseCase
+import com.anthonyla.paperize.presentation.common.util.UiText
 import io.mockk.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +39,7 @@ class AlbumViewViewModelTest {
         mockkStatic(Log::class)
         every { Log.e(any(), any(), any()) } returns 0
         every { albums.getAlbumById("album") } returns flowOf(Album.empty("album"))
+        coEvery { albums.syncAccess("album") } returns Result.Success(0)
         val savedState = SavedStateHandle()
         mockkStatic("androidx.navigation.SavedStateHandleKt")
         every { savedState.toRoute<AlbumRoute>() } returns AlbumRoute("album")
@@ -54,7 +58,7 @@ class AlbumViewViewModelTest {
         viewModel.addWallpapers(listOf("image"))
         advanceUntilIdle()
         assertEquals(ImportProgress.Idle, viewModel.importProgress.value)
-        assertEquals(R.string.import_failed, viewModel.message.value)
+        assertEquals(UiText.Resource(R.string.import_failed), viewModel.message.value)
     }
 
     @Test fun `cancellation restores idle without reporting an error`() = runTest {
@@ -100,7 +104,7 @@ class AlbumViewViewModelTest {
         advanceUntilIdle()
         assertFalse(viewModel.albumDeleted.value)
         assertFalse(viewModel.isDeleting.value)
-        assertEquals(R.string.delete_album_failed, viewModel.message.value)
+        assertEquals(UiText.Resource(R.string.delete_album_failed), viewModel.message.value)
     }
 
     @Test fun `partial removal keeps failed items selected`() = runTest {
@@ -112,7 +116,35 @@ class AlbumViewViewModelTest {
         advanceUntilIdle()
         assertTrue(viewModel.selectedWallpapers.value.isEmpty())
         assertEquals(setOf("folder"), viewModel.selectedFolders.value)
-        assertEquals(R.string.delete_items_failed, viewModel.message.value)
+        assertEquals(UiText.Resource(R.string.delete_items_failed), viewModel.message.value)
     }
 
+
+    @Test fun `opening the album checks file access`() = runTest {
+        advanceUntilIdle()
+        coVerify(exactly = 1) { albums.syncAccess("album") }
+    }
+
+    @Test fun `skipped formats and the grant limit are reported`() = runTest {
+        coEvery { imports.addImages(any(), any(), any()) } returns ImportResult(added = 2, skippedUnsupported = 3, grantsInUse = 450)
+        viewModel.addWallpapers(listOf("image"))
+        advanceUntilIdle()
+        assertEquals(UiText.Plural(R.plurals.import_skipped_unsupported, 3), viewModel.message.value)
+        assertEquals(GrantNotice.NearLimit(450), viewModel.grantNotice.value)
+
+        viewModel.dismissMessage()
+        viewModel.dismissGrantNotice()
+        coEvery { imports.addImages(any(), any(), any()) } throws GrantLimitException(needed = 5, available = 2)
+        viewModel.addWallpapers(listOf("image"))
+        advanceUntilIdle()
+        assertNull(viewModel.message.value)
+        assertEquals(GrantNotice.LimitReached(needed = 5, available = 2), viewModel.grantNotice.value)
+    }
+
+    @Test fun `a selection with only unsupported files says so`() = runTest {
+        coEvery { imports.addImages(any(), any(), any()) } returns ImportResult(added = 0, skippedUnsupported = 1)
+        viewModel.addWallpapers(listOf("image"))
+        advanceUntilIdle()
+        assertEquals(UiText.Resource(R.string.import_none_supported), viewModel.message.value)
+    }
 }

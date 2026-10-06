@@ -1,6 +1,7 @@
 package com.anthonyla.paperize.data.database.converters
 
 import androidx.room.TypeConverter
+import com.anthonyla.paperize.core.FavoritesMode
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMediaType
 import com.anthonyla.paperize.core.WallpaperSourceType
@@ -18,6 +19,12 @@ class TypeConverters {
     @TypeConverter
     fun toWallpaperSourceType(value: String): WallpaperSourceType =
         WallpaperSourceType.entries.find { it.name == value } ?: WallpaperSourceType.DIRECT
+
+    @TypeConverter
+    fun fromFavoritesMode(value: FavoritesMode): String = value.name
+
+    @TypeConverter
+    fun toFavoritesMode(value: String): FavoritesMode = FavoritesMode.fromString(value)
 
     @TypeConverter
     fun fromWallpaperMediaType(value: WallpaperMediaType): String = value.name

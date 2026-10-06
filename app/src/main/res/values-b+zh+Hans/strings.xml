@@ -226,4 +226,43 @@
   <string name="sort_load_failed">无法加载相册。请返回后重试。</string>
   <string name="sort_save_failed">无法保存顺序。请重试。</string>
   <string name="reset_failed">无法完成数据重置，请重试。</string>
+
+  <!-- 轮换顺序（分支计划 1.1） -->
+  <string name="reorder">调整顺序</string>
+  <string name="rotation_order_title">轮换顺序</string>
+  <string name="reorder_hint">长按并拖动，可调整未开启随机播放时壁纸的更换顺序。单独添加的图片排在最前，随后依次是各个文件夹。</string>
+  <string name="sort_rotation_order">轮换顺序</string>
+  <string name="sort_rotation_order_description">未开启随机播放时壁纸的更换顺序</string>
+  <string name="content_desc_current_live_wallpaper">当前动态壁纸</string>
+
+  <!-- 格式与文件访问（分支计划 1.3、1.4） -->
+  <string name="import_none_supported">所选文件的格式 Paperize 均无法显示。</string>
+  <plurals name="import_skipped_unsupported">
+    <item quantity="other">已跳过 %d 个文件，Paperize 无法显示其格式。</item>
+  </plurals>
+  <string name="unavailable">无法打开</string>
+  <string name="content_desc_unavailable">%1$s，无法打开</string>
+  <string name="error_no_available_wallpapers">此相册中的图片目前都无法打开。请在 Paperize 中打开该相册以恢复访问权限。</string>
+  <string name="access_lost_title">部分图片无法打开</string>
+  <plurals name="access_lost_message">
+    <item quantity="other">Paperize 已无权读取此相册中的 %d 张图片。</item>
+  </plurals>
+  <string name="access_lost_folder_hint">要解决此问题，请点击“授予访问权限”，然后重新选择文件夹“%1$s”。</string>
+  <string name="access_lost_images_hint">要解决此问题，请点击“授予访问权限”，然后重新选择相同的图片。</string>
+  <string name="grant_access">授予访问权限</string>
+  <string name="remove_unavailable">移除</string>
+  <plurals name="remove_unavailable_title">
+    <item quantity="other">移除 %d 张无法打开的图片？</item>
+  </plurals>
+  <string name="access_restored_folder">已恢复对该文件夹的访问权限。</string>
+  <plurals name="access_restored_images">
+    <item quantity="other">已恢复 %d 张图片的访问权限。</item>
+  </plurals>
+  <string name="access_restore_no_match">所选内容与需要访问权限的图片不匹配。请选择之前添加的同一文件夹或文件。</string>
+  <string name="grant_limit_title">单独添加的图片过多</string>
+  <plurals name="grant_limit_message">
+    <item quantity="other">Android 最多允许 Paperize 保留 %1$d 个文件和文件夹的访问权限。此次选择还需要 %2$d 个，但只剩 %3$d 个。请将这些图片放入一个文件夹，然后改为添加该文件夹：一个文件夹只占用一个。</item>
+  </plurals>
+  <string name="grant_warning_title">接近 Android 的文件数量上限</string>
+  <string name="grant_warning_message">Paperize 即将达到 Android 允许应用保留访问权限的文件和文件夹数量上限（%1$d/%2$d）。超出上限后，Android 会静默移除最早的权限，相应的图片将无法使用。请尽量添加文件夹，而不是单独的图片。</string>
 </resources>

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -48,6 +49,52 @@ fun CurrentWallpaperPreview(
     modifier: Modifier = Modifier,
     animate: Boolean = true
 ) {
+    PreviewCard(modifier) { aspectRatio ->
+        WallpaperPreviewBox(
+            wallpaperUri = lockWallpaperUri,
+            aspectRatio = aspectRatio,
+            contentDescription = stringResource(R.string.content_desc_current_lock_wallpaper),
+            animate = animate,
+            modifier = Modifier.weight(1f)
+        )
+
+        WallpaperPreviewBox(
+            wallpaperUri = homeWallpaperUri,
+            aspectRatio = aspectRatio,
+            contentDescription = stringResource(R.string.content_desc_current_home_wallpaper),
+            animate = animate,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+/** The image the live wallpaper engine last put on screen, drawn as large as one static preview. */
+@Composable
+fun CurrentLiveWallpaperPreview(
+    wallpaperUri: String?,
+    modifier: Modifier = Modifier,
+    animate: Boolean = true
+) {
+    PreviewCard(modifier, horizontalArrangement = Arrangement.Center) { aspectRatio ->
+        WallpaperPreviewBox(
+            wallpaperUri = wallpaperUri,
+            aspectRatio = aspectRatio,
+            contentDescription = stringResource(R.string.content_desc_current_live_wallpaper),
+            animate = animate,
+            modifier = Modifier.fillMaxWidth(LIVE_PREVIEW_WIDTH_FRACTION)
+        )
+    }
+}
+
+/** Matches one of the two side-by-side static previews. */
+private const val LIVE_PREVIEW_WIDTH_FRACTION = 0.5f
+
+@Composable
+private fun PreviewCard(
+    modifier: Modifier = Modifier,
+    horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(AppSpacing.medium),
+    content: @Composable RowScope.(aspectRatio: Float) -> Unit
+) {
     val configuration = LocalConfiguration.current
 
     // Portrait-oriented preview: shorter screen dimension as width.
@@ -83,23 +130,9 @@ fun CurrentWallpaperPreview(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(AppSpacing.medium)
+                horizontalArrangement = horizontalArrangement
             ) {
-                WallpaperPreviewBox(
-                    wallpaperUri = lockWallpaperUri,
-                    aspectRatio = screenAspectRatio,
-                    contentDescription = stringResource(R.string.content_desc_current_lock_wallpaper),
-                    animate = animate,
-                    modifier = Modifier.weight(1f)
-                )
-
-                WallpaperPreviewBox(
-                    wallpaperUri = homeWallpaperUri,
-                    aspectRatio = screenAspectRatio,
-                    contentDescription = stringResource(R.string.content_desc_current_home_wallpaper),
-                    animate = animate,
-                    modifier = Modifier.weight(1f)
-                )
+                content(screenAspectRatio)
             }
         }
     }

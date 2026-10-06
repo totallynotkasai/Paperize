@@ -14,7 +14,8 @@ class RefreshFolderUseCase @Inject constructor(
         val folder = albumRepository.getFolderById(folderId).first() ?: return@runCatching 0
         val source = documents.readFolder(folder.uri)
         albumRepository.addWallpapersToAlbum(
-            folder.albumId, source.images.map { it.toWallpaper(folder.albumId, folderId) }
+            // Same order as the first import; new files then join the end of this folder.
+            folder.albumId, source.images.sortedBy { it.uri }.map { it.toWallpaper(folder.albumId, folderId) }
         ).getOrThrow()
     }
 }

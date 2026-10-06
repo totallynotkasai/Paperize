@@ -51,6 +51,7 @@ fun HomeScreen(
     val showLiveWallpaperPrompt by viewModel.showLiveWallpaperPrompt.collectAsStateWithLifecycle()
     val currentHomeWallpaperUri by viewModel.currentHomeWallpaperUri.collectAsStateWithLifecycle()
     val currentLockWallpaperUri by viewModel.currentLockWallpaperUri.collectAsStateWithLifecycle()
+    val currentLiveWallpaperUri by viewModel.currentLiveWallpaperUri.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -115,7 +116,8 @@ fun HomeScreen(
                                         viewModel.changeWallpaperNowForActiveScreens()
                                     },
                                     homeWallpaperUri = currentHomeWallpaperUri,
-                                    lockWallpaperUri = currentLockWallpaperUri
+                                    lockWallpaperUri = currentLockWallpaperUri,
+                                    liveWallpaperUri = currentLiveWallpaperUri
                                 )
                             }
                         }

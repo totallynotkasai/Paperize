@@ -47,6 +47,7 @@ import com.anthonyla.paperize.domain.model.WallpaperEffects
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.presentation.common.components.SettingSwitchItem
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.AlbumSelectionBottomSheet
+import com.anthonyla.paperize.presentation.screens.wallpaper.components.CurrentLiveWallpaperPreview
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.CurrentWallpaperPreview
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.SettingSwitchWithSlider
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.TimeIntervalPicker
@@ -71,7 +72,8 @@ fun WallpaperScreen(
     onChangeWallpaperNow: () -> Unit,
     homeWallpaperUri: String?,
     lockWallpaperUri: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    liveWallpaperUri: String? = null
 ) {
     var albumSelectionContext by rememberSaveable { mutableStateOf<AlbumSelectionContext?>(null) }
     var showEmptyAlbumWarning by rememberSaveable { mutableStateOf(false) }
@@ -262,6 +264,12 @@ fun WallpaperScreen(
             CurrentWallpaperPreview(
                 homeWallpaperUri = homeWallpaperUri,
                 lockWallpaperUri = lockWallpaperUri,
+                animate = appSettings.animate
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = AppSpacing.small))
+        } else if (scheduleSettings.liveAlbumId != null) {
+            CurrentLiveWallpaperPreview(
+                wallpaperUri = liveWallpaperUri,
                 animate = appSettings.animate
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = AppSpacing.small))

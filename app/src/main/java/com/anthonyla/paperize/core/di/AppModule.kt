@@ -40,7 +40,7 @@ object AppModule {
             PaperizeDatabase::class.java,
             Constants.DATABASE_NAME
         )
-            .addMigrations(*com.anthonyla.paperize.data.database.LIBRARY_MIGRATIONS)
+            .addMigrations(*com.anthonyla.paperize.data.database.ALL_MIGRATIONS)
             .build()
     }
 

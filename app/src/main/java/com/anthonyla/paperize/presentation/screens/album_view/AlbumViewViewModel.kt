@@ -4,6 +4,8 @@ import com.anthonyla.paperize.core.constants.Constants
 import android.util.Log
 import com.anthonyla.paperize.R
 import com.anthonyla.paperize.core.Result
+import com.anthonyla.paperize.domain.usecase.GrantLimitException
+import com.anthonyla.paperize.domain.usecase.ImportResult
 import com.anthonyla.paperize.domain.usecase.ImportWallpapersUseCase
 import com.anthonyla.paperize.domain.usecase.DeleteAlbumUseCase
 import kotlinx.coroutines.CancellationException
@@ -13,16 +15,31 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.anthonyla.paperize.domain.model.Album
+import com.anthonyla.paperize.domain.model.Folder
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.presentation.common.navigation.AlbumRoute
+import com.anthonyla.paperize.presentation.common.util.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** Images the album can no longer read, and the folders they belong to. */
+data class AccessIssues(
+    val unavailableImages: Int = 0,
+    val unavailableFolders: List<Folder> = emptyList()
+)
+
+/** Android's cap on persisted file grants, reached or nearly reached by an import. */
+sealed interface GrantNotice {
+    data class LimitReached(val needed: Int, val available: Int) : GrantNotice
+    data class NearLimit(val inUse: Int) : GrantNotice
+}
 
 @HiltViewModel
 class AlbumViewViewModel @Inject constructor(
@@ -45,6 +62,18 @@ class AlbumViewViewModel @Inject constructor(
             initialValue = null
         )
 
+    val accessIssues: StateFlow<AccessIssues> = album
+        .map { album ->
+            if (album == null) return@map AccessIssues()
+            val folders = album.folders.filter { folder -> folder.wallpapers.any { it.accessLost } }
+            AccessIssues(
+                unavailableImages = album.wallpapers.count { it.accessLost } +
+                    folders.sumOf { folder -> folder.wallpapers.count { it.accessLost } },
+                unavailableFolders = folders
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), AccessIssues())
+
     private val _selectedWallpapers = MutableStateFlow<Set<String>>(emptySet())
     val selectedWallpapers: StateFlow<Set<String>> = _selectedWallpapers.asStateFlow()
 
@@ -54,15 +83,28 @@ class AlbumViewViewModel @Inject constructor(
     private val _importProgress = MutableStateFlow<ImportProgress>(ImportProgress.Idle)
     val importProgress: StateFlow<ImportProgress> = _importProgress.asStateFlow()
 
-    private val _message = MutableStateFlow<Int?>(null)
+    private val _message = MutableStateFlow<UiText?>(null)
     val message = _message.asStateFlow()
+    private val _grantNotice = MutableStateFlow<GrantNotice?>(null)
+    val grantNotice = _grantNotice.asStateFlow()
     private val _isDeleting = MutableStateFlow(false)
     val isDeleting = _isDeleting.asStateFlow()
     private val _albumDeleted = MutableStateFlow(false)
     val albumDeleted = _albumDeleted.asStateFlow()
     private var importJob: Job? = null
 
+    init {
+        // Grants can disappear while the app is closed; check before showing the album.
+        viewModelScope.launch {
+            (albumRepository.syncAccess(albumId) as? Result.Error)?.let {
+                Log.e(TAG, "Could not check file access", it.exception)
+            }
+        }
+    }
+
     fun dismissMessage() { _message.value = null }
+
+    fun dismissGrantNotice() { _grantNotice.value = null }
 
     fun addWallpapers(uris: List<String>) {
         if (uris.isEmpty()) return
@@ -83,28 +125,77 @@ class AlbumViewViewModel @Inject constructor(
         }
     }
 
-    private fun import(initialProgress: ImportProgress, block: suspend () -> Boolean) {
+    private fun import(initialProgress: ImportProgress, block: suspend () -> ImportResult) {
         if (importJob?.isCompleted == false || _isDeleting.value) return
         _message.value = null
         _importProgress.value = initialProgress
         importJob = viewModelScope.launch {
             try {
-                if (!block()) _message.value = R.string.import_already_added
+                val result = block()
+                _message.value = importMessage(result)
+                if (result.nearGrantLimit) _grantNotice.value = GrantNotice.NearLimit(result.grantsInUse)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: GrantLimitException) {
+                _grantNotice.value = GrantNotice.LimitReached(e.needed, e.available)
             } catch (e: SecurityException) {
                 Log.e(TAG, "Import permission failed", e)
-                _message.value = R.string.import_permission_error
+                _message.value = UiText.Resource(R.string.import_permission_error)
             } catch (e: Exception) {
                 Log.e(TAG, "Import failed", e)
-                _message.value = R.string.import_failed
+                _message.value = UiText.Resource(R.string.import_failed)
             }
         }.also { job ->
             job.invokeOnCompletion { _importProgress.value = ImportProgress.Idle }
         }
     }
 
+    private fun importMessage(result: ImportResult): UiText? = when {
+        result.skippedUnsupported > 0 && result.added == 0 && !result.alreadyInAlbum ->
+            UiText.Resource(R.string.import_none_supported)
+        result.skippedUnsupported > 0 ->
+            UiText.Plural(R.plurals.import_skipped_unsupported, result.skippedUnsupported)
+        result.alreadyInAlbum -> UiText.Resource(R.string.import_already_added)
+        else -> null
+    }
+
     fun cancelImport() { importJob?.cancel() }
+
+    /** [uri] is the folder the user picked to grant access again. */
+    fun restoreFolderAccess(uri: String) = restoreAccess {
+        if (importWallpapersUseCase.restoreFolderAccess(albumId, uri)) {
+            UiText.Resource(R.string.access_restored_folder)
+        } else {
+            UiText.Resource(R.string.access_restore_no_match)
+        }
+    }
+
+    /** [uris] are the images the user picked to grant access again. */
+    fun restoreImageAccess(uris: List<String>) {
+        if (uris.isEmpty()) return
+        restoreAccess {
+            val restored = importWallpapersUseCase.restoreImageAccess(albumId, uris)
+            if (restored > 0) UiText.Plural(R.plurals.access_restored_images, restored)
+            else UiText.Resource(R.string.access_restore_no_match)
+        }
+    }
+
+    private fun restoreAccess(block: suspend () -> UiText) {
+        _message.value = null
+        viewModelScope.launch {
+            _message.value = try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: GrantLimitException) {
+                _grantNotice.value = GrantNotice.LimitReached(e.needed, e.available)
+                null
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not restore access", e)
+                UiText.Resource(R.string.import_permission_error)
+            }
+        }
+    }
 
     fun deleteAlbum() {
         if (_isDeleting.value || importJob?.isCompleted == false) return
@@ -119,7 +210,7 @@ class AlbumViewViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error deleting album", e)
-                _message.value = R.string.delete_album_failed
+                _message.value = UiText.Resource(R.string.delete_album_failed)
             } finally {
                 _isDeleting.value = false
             }
@@ -156,11 +247,20 @@ class AlbumViewViewModel @Inject constructor(
         _selectedFolders.value = emptySet()
     }
 
-    fun deleteSelected() {
+    fun deleteSelected() = removeItems(_selectedWallpapers.value.toList(), _selectedFolders.value.toList())
+
+    /** Remove every image the album can no longer read, including folders that lost access. */
+    fun removeUnavailable() {
+        val album = album.value ?: return
+        removeItems(
+            wallpaperIds = album.wallpapers.filter { it.accessLost }.map { it.id },
+            folderIds = accessIssues.value.unavailableFolders.map { it.id }
+        )
+    }
+
+    private fun removeItems(wallpaperIds: List<String>, folderIds: List<String>) {
         if (_isDeleting.value || importJob?.isCompleted == false) return
         _message.value = null
-        val wallpaperIds = _selectedWallpapers.value.toList()
-        val folderIds = _selectedFolders.value.toList()
         if (wallpaperIds.isEmpty() && folderIds.isEmpty()) return
         _isDeleting.value = true
         viewModelScope.launch {
@@ -168,20 +268,20 @@ class AlbumViewViewModel @Inject constructor(
                 if (wallpaperIds.isNotEmpty()) {
                     when (albumRepository.removeWallpapersFromAlbum(albumId, wallpaperIds)) {
                         is Result.Success -> _selectedWallpapers.value -= wallpaperIds.toSet()
-                        else -> _message.value = R.string.delete_items_failed
+                        else -> _message.value = UiText.Resource(R.string.delete_items_failed)
                     }
                 }
                 folderIds.forEach { folderId ->
                     when (albumRepository.removeFolderFromAlbum(albumId, folderId)) {
                         is Result.Success -> _selectedFolders.value -= folderId
-                        else -> _message.value = R.string.delete_items_failed
+                        else -> _message.value = UiText.Resource(R.string.delete_items_failed)
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error removing selected items", e)
-                _message.value = R.string.delete_items_failed
+                _message.value = UiText.Resource(R.string.delete_items_failed)
             } finally {
                 _isDeleting.value = false
             }
