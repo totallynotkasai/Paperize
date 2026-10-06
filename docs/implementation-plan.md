@@ -17,7 +17,7 @@ Status: ☐ to do · ◐ in progress · ☑ done.
   fork's `master`, which always stays buildable.
 - Every phase ends with unit tests, lint and a debug build passing, a manual check on your
   phone, and a CHANGELOG entry.
-- Debug builds install as **Paperize Debug** (`com.anthonyla.paperize.debug`) next to your
+- Debug builds install as **Paperize Debug** (**Paperized Debug** since Phase 7; `com.anthonyla.paperize.debug`) next to your
   4.1.1, so your real albums and settings are never touched.
 - Device tests: `WallpaperUtilInstrumentedTest` sets your home-screen wallpaper to solid
   colours. It is excluded from runs on your phone unless you say otherwise.
@@ -1009,12 +1009,113 @@ Nova and the HyperOS launcher.
 
 | ID | Item | Size | Status |
 |----|------|------|--------|
-| 7.1 | Tests for the change service, scheduled worker, live engine logic, widgets and the v5 migration | M | ☐ |
-| 7.2 | README (formats, features) and CHANGELOG | S | ☐ |
-| 7.3 | Personal release build signed with your own key. It can't update the installed 4.1.1 (different signature), so switching means uninstalling 4.1.1 and re-creating albums, or keeping both side by side. | S | ☐ |
-| 7.4 | Optional, only if you want: offer the Phase 1–3 bug fixes back to upstream as pull requests | S | ☐ |
+| 7.1 | Tests for the change service, scheduled worker, live engine logic, widgets and the v5 migration | M | ☑ |
+| 7.2 | README (formats, features) and CHANGELOG | S | ☑ |
+| 7.3 | Personal release build signed with your own key. It can't update the installed 4.1.1 (different signature), so switching means uninstalling 4.1.1 and re-creating albums, or keeping both side by side. | S | ◐ (you) |
+| 7.4 | Optional, only if you want: offer the Phase 1–3 bug fixes back to upstream as pull requests | S | skipped (your choice) |
 
 Phases 4–6 can be reordered to taste once Phase 2 is done; 4.1 needs 2.1, 5.2 and 5.3 need 1.0.
+
+**Phase 7 notes and deviations:**
+- Work is on branch `phase-7/hardening-release`, branched from `phase-6/smarter-scheduling` and kept local
+  like Phases 1–6. CI was run locally on Windows with the workflow's commands (`gradlew clean test`, the
+  new schema check, then `gradlew :app:lintDebug`) plus debug and release builds: 332/332 unit tests pass
+  (282 before, 50 new), the database schemas are unchanged, lint reports 0 errors and the same 18
+  warnings as the baseline, and the debug, device-test and release builds succeed. The only Kotlin
+  compiler warnings are the two deprecated `Slider` overloads
+  already noted in Phases 2 and 4.
+- Your choices (2026-10-07): the release **replaces 4.1.1** (same app ID), the app is called
+  **Paperized**, and 7.4 is skipped for now.
+- 7.1, how the code was made testable: the decisions were pulled out of the Android classes into plain
+  code, which the classes now call. No behaviour changed apart from the fix below.
+  - Change service: a start's handling (run in the foreground, hand over to a background job, end a
+    reported request, stop only its own start) is `ChangeServiceStarts`, next to the service.
+  - Live engine: `LiveEngineRules.kt` holds which engine leads (`EngineRoster`), what each engine shows
+    and records, when the short-interval timer runs, when screen off and double-tap change, and what a
+    settings update asks of an engine (`LiveSettingsTracker`: restart the timer, reload for new scaling,
+    load a new album, or hold a day/night switch back).
+  - Widgets: drawing and messages moved from `ShuffleWidgets` into `ShuffleWidgetDisplay`, so the tap
+    logic can be tested without a launcher and the layouts without the settings.
+  - The workers needed no changes: they are tested by calling `doWork()` with mocked parameters.
+- 7.1, **found and fixed:** the live wallpaper's "Change on screen off" still changed while changing was
+  **paused**. Phase 6 made every automatic change wait while paused (it said so for this one too), but
+  this path only checked the battery settings. It now waits like the others; double-tap, a manual
+  change, still works while paused.
+- 7.1, new unit tests (50): the change service's starts (5); the scheduled change job (10: changes,
+  cancels itself once the settings no longer call for it, skips a turn in battery saver, reports an
+  empty album and stops, retries quietly then notifies on the last attempt, stays cancelled, waits for a
+  change in progress); the background request job (2) and album refresh job (6: the 4-hour limit, a clock
+  set back, failures of one album or folder not stopping the others); the live engine's rules (18); and
+  the widgets' taps, messages, redraws and live-mode behaviour (9).
+- 7.1, new device tests (4): the widgets' real layouts inflated as a launcher does, ready and greyed out,
+  one cell and two (names, badge, glyph alpha, "Not set up", taps, screen-reader labels; 3); and a second
+  v5 migration test with older rows (live queue and current rows, 4.2.0's shared "both screens" record),
+  defaults for rows written without the new columns, an integrity check, and deleting an album still
+  removing everything it owns and nothing else (1). The first migration test already covered the new
+  columns and their defaults.
+- **Beyond the plan, CI:** the workflow now fails if the build exports a database schema that isn't
+  committed, which catches an entity changed without a new database version and migration. Signed
+  release APKs are named `paperized-v….apk`.
+- 7.2: the README now describes the fork: what Paperized is and its relation to Paperize, the features
+  added in Phases 1–6, formats (SVG yes, TIFF no), installing (the release replaces Paperize, which must
+  be uninstalled first), building and signing a release, the tests, and an updated architecture section.
+  Upstream's download, F-Droid, IzzyOnDroid and Crowdin badges and links are gone (decision F); the
+  credits keep Anthony La and his sponsor link. The CHANGELOG's "Unreleased (fork)" section became
+  **v4.2.0-fork.1 (Paperized)**, with a "Name and release" section first and the two "Development
+  setup" sections merged into one "Development and testing" section at the end. `metadata/` (upstream's
+  F-Droid listing) is left as it was.
+- **Rename (your answer "Call it Paperized"):** the launcher name, the live wallpaper's name and every
+  user-facing mention of the app in English and Simplified Chinese now say **Paperized** (30 English and
+  27 Chinese strings); debug builds are **Paperized Debug**. Code, package names, the app ID and the
+  repository keep "Paperize". **Deviation:** you answered the naming question, which was asked for the
+  side-by-side case, after choosing "replace", so I read it as renaming the app itself.
+- 7.3, what is done:
+  - Version **4.2.0-fork.1** (version code 58): upstream's 4.2.0 plus the fork's changes, so it can't be
+    mistaken for an upstream release. Change it in `app/build.gradle.kts` if you prefer another scheme.
+  - The release is signed with the key named in a git-ignored `keystore.properties` in the project root
+    (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`); CI's environment variables still take
+    precedence. Without a key, `assembleRelease` now builds an unsigned APK instead of failing. Git
+    ignores `keystore.properties`, `*.jks` and `*.keystore`.
+  - Checked with a throwaway key made in a temporary folder (not your key; deleted afterwards): the
+    release APK was signed with it (`apksigner verify`), and `keystore.properties` stayed out of git. The
+    APK is `com.anthonyla.paperize`, version 4.2.0-fork.1, labelled "Paperized", with no network
+    permission.
+  - **Beyond the plan:** `-Ppaperized.tryRelease` builds the shrunk release under the debug app's ID and
+    key, so it can be tried on the phone over Paperized Debug before you uninstall 4.1.1. The phone
+    check below found the shrunk build works; no new R8 keep rules were needed.
+- 7.3, **what is left for you:** create your key and `keystore.properties` (README, "Release build"),
+  build with `gradlew assembleRelease`, then, when you are ready to switch, uninstall 4.1.1 (its albums
+  and settings go with it) and install `app/build/outputs/apk/release/app-release.apk`. Back the key up:
+  only APKs signed with it can update the installed app. I didn't create the key, because its passwords
+  should never pass through me.
+- 7.4: skipped, as you chose. The Phase 1–3 fixes stack on the v5 migration, so offering them upstream
+  would mean rebuilding them on upstream's code as separate changes.
+- New text: none beyond the rename; the Chinese strings only changed the app's name.
+- Device tests (installed with adb and run with `am instrument`): 66 passed, 0 failed: 50 in the
+  repository, migration, document-access, display-name, live-shader, alarm and new widget-layout classes
+  (4 new), and all 16 UI tests. Not run, as before: `WallpaperUtilInstrumentedTest`, and the preferences
+  and scheduler tests. No wallpaper changed during the runs (wallpaper IDs 2429 and 2430 before and
+  after), and this time HyperOS asked for nothing.
+- Phone check (2026-10-07, the shrunk release on the phone, as you agreed). Built with
+  `assembleRelease -Ppaperized.tryRelease` (R8 on, not debuggable, debug key) and installed over
+  Paperized Debug, which kept its albums and settings (static mode, paused, Home on with Phase6 by day and
+  Night6 at night). Passed:
+  - The app opened in 93 ms, titled "Paperized", with its settings as they were. The Library, an album,
+    its menu and settings sheet, a folder view listing its images, Settings, and Scheduling Options all
+    showed normally.
+  - "Change wallpaper now" changed Home once (ID 2429 → 2431; Lock stayed 2430) and said "Wallpaper
+    changed".
+  - The album refresh job, which Hilt's worker factory creates, ran and succeeded ("refreshed 186 min
+    ago; skipping"), so R8 kept what WorkManager and Hilt need.
+  - Nothing in the crash log; Paperized's own log had only two harmless HyperOS lines.
+  - Afterwards the normal debug build went back on (debuggable again, same data), and the try-out APK was
+    deleted from the build folder so it can't be mistaken for the real release.
+  - 4.1.1 was untouched (same version and install time).
+  - Not checked on the phone: the release signed with your key (it doesn't exist yet) and installing it in
+    place of 4.1.1; that is the switch itself, which is yours to make.
+- Left on the phone: Paperized Debug (now so named) as Phase 6 left it, static mode with changing paused,
+  Home on with Phase6 and night album Night6, plus the test APK. Your home screen shows a Paperized Debug
+  test image until 4.1.1's next change; the lock screen wasn't touched.
 
 ---
 
