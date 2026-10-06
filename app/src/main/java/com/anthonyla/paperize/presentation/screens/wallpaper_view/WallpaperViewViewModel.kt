@@ -11,10 +11,8 @@ import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.presentation.common.navigation.WallpaperViewRoute
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeEvents
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
-import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -39,9 +37,6 @@ class WallpaperViewViewModel @Inject constructor(
     val applying: StateFlow<Boolean> = changeEvents.pending
         .map { it > 0 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), false)
-
-    /** Collect only while the viewer is visible. */
-    val changeResults: SharedFlow<WallpaperChangeResult> = changeEvents.results
 
     fun applyTo(screenType: ScreenType) {
         require(screenType != ScreenType.LIVE)

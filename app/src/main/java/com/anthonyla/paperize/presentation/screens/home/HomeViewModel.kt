@@ -15,7 +15,6 @@ import com.anthonyla.paperize.domain.usecase.CreateAlbumUseCase
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeEvents
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
-import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult
 import com.anthonyla.paperize.service.worker.WallpaperScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -29,7 +28,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -93,9 +91,6 @@ class HomeViewModel @Inject constructor(
     val changeInProgress: StateFlow<Boolean> = changeEvents.pending
         .map { it > 0 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), false)
-
-    /** Outcomes of "Change wallpaper now"; collect only while the screen is visible. */
-    val changeResults: SharedFlow<WallpaperChangeResult> = changeEvents.results
 
     /**
      * URI of the wallpaper Paperize last applied for the home / lock screen, for the in-app preview.

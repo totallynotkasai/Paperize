@@ -19,8 +19,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -29,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -49,7 +46,6 @@ import coil3.compose.AsyncImage
 import com.anthonyla.paperize.R
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
-import com.anthonyla.paperize.presentation.common.components.ChangeResultSnackbars
 import com.anthonyla.paperize.presentation.theme.AppSpacing
 import net.engawapg.lib.zoomable.rememberZoomState
 import net.engawapg.lib.zoomable.zoomable
@@ -72,8 +68,6 @@ fun WallpaperViewScreen(
     val wallpaperMode by viewModel.wallpaperMode.collectAsStateWithLifecycle()
     val applying by viewModel.applying.collectAsStateWithLifecycle()
     var showApplyDialog by rememberSaveable { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    ChangeResultSnackbars(viewModel.changeResults, snackbarHostState)
 
     LightSystemBarIcons()
 
@@ -81,7 +75,6 @@ fun WallpaperViewScreen(
         modifier = modifier.fillMaxSize(),
         containerColor = Color.Black,
         contentColor = ViewerContent,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(

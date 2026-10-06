@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -23,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -345,7 +347,7 @@ fun WallpaperScreen(
                 }
                 // Launchers scroll only the home screen, and only Fill keeps the image's overflow.
                 if (showsHorizontalScrolling(wallpaperMode, scheduleSettings)) {
-                    SettingSwitchItem(
+                    InlineSwitchRow(
                         title = stringResource(R.string.horizontal_wallpaper_scrolling),
                         description = stringResource(R.string.horizontal_wallpaper_scrolling_description),
                         checked = scheduleSettings.homeScrollingEnabled,
@@ -639,6 +641,38 @@ fun WallpaperScreen(
  */
 internal fun showsHorizontalScrolling(mode: WallpaperMode, settings: ScheduleSettings): Boolean =
     mode == WallpaperMode.STATIC && settings.homeEnabled && settings.homeScalingType == ScalingType.FILL
+
+/** A switch row inside a card that already has its own padding; the whole row toggles. */
+@Composable
+private fun InlineSwitchRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .padding(vertical = AppSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.large)
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AppSpacing.extraSmall)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(checked = checked, onCheckedChange = null)
+    }
+}
 
 @Composable
 private fun ScreenToggleCard(

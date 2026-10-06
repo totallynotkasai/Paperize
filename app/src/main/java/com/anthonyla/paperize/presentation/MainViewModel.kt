@@ -5,8 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.anthonyla.paperize.domain.model.AppSettings
 import com.anthonyla.paperize.domain.repository.SettingsRepository
+import com.anthonyla.paperize.service.wallpaper.PendingChangeResult
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeEvents
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -17,8 +20,14 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    private val changeEvents: WallpaperChangeEvents
 ) : ViewModel() {
+
+    /** Outcomes of "Change wallpaper now" and "Set wallpaper", shown on whichever screen is open. */
+    val changeResults: Flow<PendingChangeResult> = changeEvents.results
+
+    fun changeResultShown(result: PendingChangeResult) = changeEvents.shown(result)
 
     val appSettings: StateFlow<AppSettings?> = settingsRepository.getAppSettingsFlow()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)

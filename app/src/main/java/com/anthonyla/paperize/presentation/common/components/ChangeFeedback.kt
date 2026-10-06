@@ -11,21 +11,31 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.anthonyla.paperize.R
+import com.anthonyla.paperize.service.wallpaper.PendingChangeResult
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult
 import com.anthonyla.paperize.service.wallpaper.WallpaperChangeResult.Outcome
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Shows the outcome of "Change wallpaper now" or "Set wallpaper" as a snackbar. Results are
- * collected only while the screen is visible; otherwise problems arrive as notifications instead.
+ * Shows the outcome of "Change wallpaper now" or "Set wallpaper" as a snackbar while the app is
+ * visible. A result counts as shown ([onShown]) only once its snackbar has run its course, so if
+ * the activity is re-created part-way (a new wallpaper often triggers that), it is shown again.
  */
 @Composable
-fun ChangeResultSnackbars(results: Flow<WallpaperChangeResult>, snackbarHostState: SnackbarHostState) {
+fun ChangeResultSnackbars(
+    results: Flow<PendingChangeResult>,
+    onShown: (PendingChangeResult) -> Unit,
+    snackbarHostState: SnackbarHostState
+) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val resources by rememberUpdatedState(LocalResources.current)
+    val markShown by rememberUpdatedState(onShown)
     LaunchedEffect(results, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            results.collect { snackbarHostState.showSnackbar(changeResultMessage(resources, it)) }
+            results.collect { pending ->
+                snackbarHostState.showSnackbar(changeResultMessage(resources, pending.result))
+                markShown(pending)
+            }
         }
     }
 }

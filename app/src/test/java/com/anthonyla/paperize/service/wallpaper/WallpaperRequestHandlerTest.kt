@@ -39,7 +39,8 @@ class WallpaperRequestHandlerTest {
     private val scheduler = mockk<WallpaperScheduler>(relaxed = true)
     private val wallpapers = mockk<WallpaperRepository>()
     private val notifier = mockk<WallpaperNotifier>(relaxed = true)
-    private val events = WallpaperChangeEvents()
+    private var appInForeground = false
+    private val events = WallpaperChangeEvents(appInForeground = { appInForeground }, clock = { 0L })
     private val handler = WallpaperRequestHandler(
         context, controller, settings, WallpaperChangeLock(), scheduler, wallpapers, notifier, events
     )
@@ -57,13 +58,16 @@ class WallpaperRequestHandlerTest {
 
     @After fun tearDown() = unmockkAll()
 
-    /** A screen showing results, as the visible Wallpaper tab or image viewer does. */
+    /** The app in the foreground, showing results as its snackbar host does. */
     private fun TestScope.visibleScreen(): List<WallpaperChangeResult> =
         mutableListOf<WallpaperChangeResult>().also { shown ->
-            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { events.results.collect(shown::add) }
+            appInForeground = true
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                events.results.collect { shown += it.result; events.shown(it) }
+            }
         }
 
-    @Test fun `a reported change is shown on the visible screen and restarts the countdown`() = runTest {
+    @Test fun `a reported change is shown in the app and restarts the countdown`() = runTest {
         val shown = visibleScreen()
         events.begin()
         handler.handle(WallpaperRequest.Change(ScreenType.HOME), report = true)
@@ -73,7 +77,7 @@ class WallpaperRequestHandlerTest {
         verify(exactly = 0) { notifier.showChangeFailed(any()) }
     }
 
-    @Test fun `with no screen visible a failure becomes a notification`() = runTest {
+    @Test fun `with the app in the background a failure becomes a notification`() = runTest {
         coEvery { controller.change(any(), any()) } throws IllegalStateException("boom")
         events.begin()
         handler.handle(WallpaperRequest.Change(ScreenType.HOME), report = true)
@@ -81,7 +85,7 @@ class WallpaperRequestHandlerTest {
         assertEquals(0, events.pending.value)
     }
 
-    @Test fun `a visible screen shows the failure instead of a notification`() = runTest {
+    @Test fun `with the app open the failure is shown instead of notified`() = runTest {
         val shown = visibleScreen()
         coEvery { controller.change(any(), any()) } throws IllegalStateException("boom")
         events.begin()

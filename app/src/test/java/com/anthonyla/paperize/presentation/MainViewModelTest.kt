@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
 import com.anthonyla.paperize.domain.model.AppSettings
 import com.anthonyla.paperize.domain.repository.SettingsRepository
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeEvents
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -40,7 +41,7 @@ class MainViewModelTest {
     }
 
     private fun viewModel(saved: SavedStateHandle = SavedStateHandle()) =
-        MainViewModel(settings, saved).also { store.put(it.hashCode().toString(), it) }
+        MainViewModel(settings, saved, WallpaperChangeEvents()).also { store.put(it.hashCode().toString(), it) }
 
     @Test fun `the splash screen waits for settings`() = runTest {
         val viewModel = viewModel()

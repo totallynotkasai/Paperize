@@ -13,15 +13,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -33,7 +30,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import com.anthonyla.paperize.R
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.openLiveWallpaperPicker
 import com.anthonyla.paperize.core.WallpaperMode
-import com.anthonyla.paperize.presentation.common.components.ChangeResultSnackbars
 import com.anthonyla.paperize.presentation.screens.home.components.HomeTopBar
 import com.anthonyla.paperize.presentation.screens.home.components.getTabItems
 import com.anthonyla.paperize.presentation.screens.library.LibraryScreen
@@ -58,8 +54,6 @@ fun HomeScreen(
     val currentLiveWallpaperUri by viewModel.currentLiveWallpaperUri.collectAsStateWithLifecycle()
     val liveWallpaperNotSet by viewModel.liveWallpaperNotSet.collectAsStateWithLifecycle()
     val changeInProgress by viewModel.changeInProgress.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-    ChangeResultSnackbars(viewModel.changeResults, snackbarHostState)
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -76,7 +70,6 @@ fun HomeScreen(
     val pagerState = rememberPagerState { tabItems.size }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             HomeTopBar(
                 onSettingsClick = onNavigateToSettings
