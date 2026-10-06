@@ -836,10 +836,172 @@ Nova and the HyperOS launcher.
 
 | ID | Item | Size | Status |
 |----|------|------|--------|
-| 6.1 | **Only change while charging / pause in battery saver.** Charging uses a background-job constraint; battery saver is checked at run time; the live short-interval timer respects both. Manual changes (button, tile, widgets) always work. | S | ☐ |
-| 6.2 | **Static: change on screen off and/or unlock.** Optional listener running as a foreground service, because Android only delivers these events to running apps. Choose a target per trigger, set a minimum gap between changes, and hold the CPU awake while applying. **Hiding the notification (decision D):** Android requires one to exist, so it uses a minimum-importance channel (no status-bar icon, collapsed at the bottom of the shade). Setup includes a one-tap link to turn that channel off; the service keeps running and the notification then only appears in the system's "active apps" list. Verify this on HyperOS. | M | ☐ |
-| 6.3 | **Re-apply adaptive brightness when dark mode switches** (static). Instant for manual toggles via a settings-change trigger; a light 15-minute check catches scheduled dark mode; in-app callback while running. Live mode already does this. | M | ☐ |
-| 6.4 | **Fixed times of day and day/night albums.** "Change at" times (e.g. 07:00, 19:00) as an alternative to intervals; optional "Night album" per screen; the user picks whether it switches at clock times or follows the phone's dark mode (decision C). Uses battery-friendly alarms that need no special permission (accurate to a few minutes). | L | ☐ |
+| 6.1 | **Only change while charging / pause in battery saver.** Charging uses a background-job constraint; battery saver is checked at run time; the live short-interval timer respects both. Manual changes (button, tile, widgets) always work. | S | ☑ |
+| 6.2 | **Static: change on screen off and/or unlock.** Optional listener running as a foreground service, because Android only delivers these events to running apps. Choose a target per trigger, set a minimum gap between changes, and hold the CPU awake while applying. **Hiding the notification (decision D):** Android requires one to exist, so it uses a minimum-importance channel (no status-bar icon, collapsed at the bottom of the shade). Setup includes a one-tap link to turn that channel off; the service keeps running and the notification then only appears in the system's "active apps" list. Verify this on HyperOS. | M | ☑ |
+| 6.3 | **Re-apply adaptive brightness when dark mode switches** (static). Instant for manual toggles via a settings-change trigger; a light 15-minute check catches scheduled dark mode; in-app callback while running. Live mode already does this. | M | ☑ |
+| 6.4 | **Fixed times of day and day/night albums.** "Change at" times (e.g. 07:00, 19:00) as an alternative to intervals; optional "Night album" per screen; the user picks whether it switches at clock times or follows the phone's dark mode (decision C). Uses battery-friendly alarms that need no special permission (accurate to a few minutes). | L | ☑ |
+
+**Phase 6 notes and deviations:**
+- Work is on branch `phase-6/smarter-scheduling`, branched from `phase-5/library-features` and kept local
+  like Phases 1–5. CI was run locally on Windows with the workflow's commands (`gradlew clean test`, then
+  `gradlew :app:lintDebug`) plus a debug build, last on the final code including the
+  phone-check fixes: 282/282 unit tests pass (237 before, 45 new), lint 0 errors and the same 18 warnings
+  as the baseline, debug build successful. The only Kotlin compiler warnings are the two deprecated
+  `Slider` overloads already noted in Phases 2 and 4. **No database change:** every new setting
+  is a preference, and the bookkeeping (when each screen last changed, which theme it was drawn for,
+  when set times were last checked) lives in a small separate preferences file (`schedule_state`), as
+  2.8's refresh time does.
+- **Deviation in layout:** the plan didn't say where the new controls go. The Wallpaper tab gains a
+  "Schedule" choice (Interval / Set times) above the interval boxes; "Individual Scheduling" moved
+  under it, because it only applies to intervals. Everything else is on a new **Scheduling Options**
+  screen, opened from a "More Scheduling Options" card under the schedule that lists what is on
+  ("On unlock · Night albums · Only while charging"). The screen has three cards: Screen Off and
+  Unlock (static mode only), Day and Night, and Battery, with a note at the top while changing is
+  paused. It shares the Wallpaper tab's view model, so edits save and reschedule exactly as before.
+- **One rule for every option below:** "automatic" changes are the interval jobs, set times, the
+  day/night switch, screen off and unlock, and the live wallpaper's short-interval timer and
+  screen-off change. They happen only while changing is on, and follow 6.1's two conditions.
+  "Manual" changes (Change wallpaper now, the viewer's Set wallpaper, tile, widgets, shortcut,
+  live double-tap, picking an album) always happen. Automatic requests carry an `automatic` flag
+  and are checked when they run, so a job queued earlier can't slip past a newer setting.
+- 6.1: "Only Change While Charging" adds a charging constraint to the interval jobs (an existing job
+  keeps its countdown when the setting changes), so a change that falls due unplugged happens once
+  the phone is charging, like any WorkManager job. Set times and the day/night switch wait for the
+  charger the same way; several missed while unplugged come to one change. Screen off and unlock are
+  moments, so they are skipped while unplugged rather than queued. "Pause in Battery Saver" is
+  checked when a change would run and skips it; the next interval or time tries again. The live
+  short-interval timer skips turns while either condition holds. **Beyond the plan:** the live
+  wallpaper's own screen-off change follows both conditions too, since it is automatic.
+- 6.2: a foreground service (`ScreenEventService`, type `specialUse`, which is why 3.10 kept that
+  permission) listens for screen off and unlock (`USER_PRESENT`) while changing is on, in static
+  mode, with either option on and a screen rotating. It is started and stopped from the settings;
+  Android lets an app start one only from the foreground or a few moments such as a restart or an
+  app update, so it also starts on those (`BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`) and whenever
+  Paperize comes to the foreground. Each event takes a partial wake lock (at most 2 minutes) for the
+  change. Targets: each event has Lock / Home / Both, offered only while both screens rotate (with
+  one, it changes that one). The minimum gap is a choice of None, 5 min, 15 min (default), 1 h or
+  3 h, and counts **any** change of that screen, so an unlock right after a screen-off change, or
+  right after the interval job, leaves it alone. Like double-tap (2.11), these changes restart the
+  interval countdown. **Deviation in the control:** the gap was first a row of five buttons, which
+  cut their labels short on this phone ("N…", "15…"); it is now a dropdown.
+- 6.2, notification (decision D): **deviation.** The channel ("Screen-off and unlock changes") asks
+  for minimum importance as planned, but Android raises a foreground service's channel to *low*
+  (the phone reported `mOriginalImp=1`, `mImportance=2`), and HyperOS then showed Paperize's icon in
+  the status bar. So the "no status-bar icon" part can't come from the channel's importance. What
+  does work, as the plan's fallback said: turning the channel off. The notification has a "Hide
+  notification" action, and the options card explains the notification and has a button straight
+  to the channel's own Android settings (HyperOS opens that page directly), and says once it is off.
+  Checked on HyperOS: with the channel off, the icon and notification are gone, the service stays in
+  the foreground (`isForeground=true`) and screen-off changes keep working. HyperOS's Control Center
+  has no "active apps" list, so the listener then shows nowhere (only in the app's settings).
+- 6.2, **found in the phone check and fixed:** unlock changes didn't happen. HyperOS's SystemUI sends
+  `USER_PRESENT` under an ordinary app UID (10233), and Android delivers a broadcast to a receiver
+  registered as not exported only from the system core or the app itself; screen off comes from the
+  system server, so it worked. Both are protected broadcasts that no ordinary app can send, so the
+  receiver is now registered as exported.
+- 6.3: the dark theme is watched three ways, as planned: a job with content-URI triggers on the theme
+  settings (`ui_night_mode` and its two override keys, plus HyperOS's own `dark_mode_enable`,
+  found on this phone by diffing the settings while switching the theme), re-armed after each run; a
+  15-minute periodic check for schedule-driven switches, which write no setting; and the
+  application's configuration callback while Paperize runs. **Beyond the plan,** each app start
+  also checks, so a switch missed while Paperize was stopped is caught up. These run only while
+  something needs them (static adaptive brightness with a screen rotating, or night albums following
+  the theme). Each static screen records which theme it was last drawn for, and only screens drawn
+  for the other theme are redrawn, so several paths noticing the same switch redraw once.
+  **Beyond the plan:** a redraw keeps the image, so, like effect edits (2.3), it happens while
+  changing is paused and isn't held back by 6.1.
+- 6.3, **found in the phone check and fixed:** the setting trigger was first WorkManager work. When it
+  started Paperize from cold, WorkManager's start-up clean-up ("Found unfinished work, scheduling
+  it") scheduled the job again while it was running, which stopped it before the worker ran, so the
+  switch waited for the 15-minute check. The trigger is now a plain JobScheduler job of Paperize's
+  own (`DarkThemeJobService`), which WorkManager's clean-up leaves alone; WorkManager's job IDs are
+  capped at 1,000,000 so the two can't collide. The 15-minute check stays a WorkManager job.
+- 6.4, set times: "Set times" replaces the interval with a list of times (07:00 and 19:00 to start,
+  up to 12, at least one), shown as chips; tap one to change it, its cross to remove it, or "Add
+  time". The time dialog has a clock and, **beyond the plan,** a keyboard toggle for typing the
+  time, which is easier with a screen reader. Set times apply to every rotating screen (one change
+  for both), so separate schedules stay an interval-only option; live mode can use them too. One
+  inexact alarm (`setWindow`, no permission) is armed for the next set time or clock switch; each
+  alarm arms the next, and restarts, app updates, clock and time-zone changes and every app start
+  re-arm it. A time missed while the phone was off (or the alarm was dropped) is caught up once at
+  the next start; starting set times, resuming changing or editing the list never makes up for
+  earlier times. **Deviation in accuracy:** Android 12+ allows no window shorter than 10 minutes
+  without the exact-alarm permission, and on this phone HyperOS delivered at the **end** of the
+  window (22:28 → 22:38:00), so changes come up to 10 minutes after their time rather than "a few
+  minutes"; a phone left asleep may hold the alarm until it next wakes. The card says so.
+- 6.4, night albums: each turned-on screen with a day album can have a night album ("Home at
+  Night", "Lock at Night", and **beyond the plan,** "Album at Night" for the live wallpaper). Night
+  follows Set hours (19:00–07:00 to start) or the Dark theme (decision C); the card says which
+  albums are in use and until when. The switch is stored (`nightActive`), so every reader of a
+  screen's album sees the same answer: rotation, previews, widgets, the tile and the live engine.
+  At the switch, screens with a night album change to the album now in use, as an automatic change
+  (so not while paused or in battery saver, and after plugging in with "Only while charging"); if
+  the switch can't change a screen, its next change still comes from the right album. Picking a
+  night album while it is night, or editing the hours or trigger so that the other albums come into
+  use, changes those screens at once, like picking an album. Screens that share a day album but not
+  a night album split into a job each at night and merge again by day, keeping their countdowns.
+  The live wallpaper follows the switch by itself, by the same rules. A night album counts only
+  next to a day album, so a screen never rotates at night alone.
+- New text has English and Simplified Chinese versions; the Chinese may want a native speaker's
+  polish.
+- New unit tests cover the night-album settings (which album each screen uses by day and at night,
+  sharing and splitting, validation, stored set times), the time maths (night across midnight,
+  next occurrence, a daylight-saving jump, which set times came round), the alarm and dark-theme
+  rules, the battery conditions (and that the phone is asked only when needed), which screens a
+  screen-off or unlock changes and the gap, the set-time, switch and redraw coordinator (once per
+  time, catching up, waiting for the charger, battery saver, paused, live following by itself, no
+  double redraw), automatic requests in the handler and through a background job, the scheduler
+  (no interval jobs with set times, the charging constraint), the view model (night albums picked
+  by day and at night, new night hours, older drafts keeping the night state) and the options
+  card's summary.
+- Device tests (installed with adb and run with `am instrument`): 62 passed, 0 failed, re-run on the
+  final build: 46 in the repository, migration, document-access, display-name, live-shader and new
+  alarm classes (3 new: set times arm and cancel the alarm; only a new list of times starts afresh;
+  the dark-theme job and 15-minute check start and stop with the settings, all restored afterwards),
+  and 16 UI tests (3 new: set times replacing the interval boxes, the options appearing as they
+  apply, and live mode's options). Not run, as before: `WallpaperUtilInstrumentedTest`, and the
+  preferences and scheduler tests. No wallpaper changed during the runs.
+- Phone check (2026-10-06, Paperize Debug switched to static mode, which reset only its own albums;
+  albums "Phase6" = `Pictures/PaperizePhase2` and "Night6" = `Pictures/PaperizePhase4`; Home only,
+  Lock off, as you chose; dark theme and battery saver switched over adb with your permission).
+  Changes were counted with the home wallpaper ID in `dumpsys wallpaper`. Passed:
+  - Turning changing on changed Home once (2401 → 2402). Set times: the interval job went away (only
+    the 3 AM refresh job left), the alarm showed in `dumpsys alarm` as RTC_WAKEUP 22:28 with a
+    10-minute window, and at 22:38:00 Home changed once (2402 → 2403) and the next alarm was armed for
+    07:00 (6.4). An app update re-armed it through `MY_PACKAGE_REPLACED` without changing anything.
+  - Night album by the clock: picking "Night6" at 22:38 (inside the default 19:00–07:00 night)
+    changed Home to it at once (red "1", Night6's first image; Phase6 would have shown blue "3").
+    Moving night's start to 22:44 made it day again and Home went back to Phase6 at once; the card
+    said "Day albums in use until 22:44.". At 22:54:00 the alarm switched to night, Home changed once
+    to Night6's next image (green "2") and the jobs were planned again (6.4).
+  - Night following the dark theme: switching the theme with Paperize in the background changed Home
+    within about a second each way (the app's own callback). With Paperize's process ended, the new
+    job started it and Home changed within 3 seconds (6.3, 6.4).
+  - Adaptive brightness: turning it on redrew Home once; with the process ended, switching to light
+    redrew it within 2 seconds, once, although the start-up check and the job both noticed; with
+    Paperize open, switching to dark redrew it at once (6.3).
+  - Screen off changed Home (wake lock held for about a quarter of a second); after the fix, unlock
+    changed it too. With a 15-minute gap, a screen off and an unlock right after a change left Home
+    alone (6.2).
+  - Battery: with "Only change while charging" on and the phone shown as unplugged (`dumpsys battery
+    unplug`), a screen off was skipped ("NOT_CHARGING") while "Change wallpaper now" still changed
+    Home and said "Wallpaper changed"; plugged back in, a screen off changed it. With battery saver on
+    (Android allows it only while unplugged), a screen off was skipped ("BATTERY_SAVER") (6.1).
+  - 4.1.1 was untouched (same version and install time). One home change at about 23:19 wasn't Paperize
+    Debug's: it had no job, event or log then, and 4.1.1's process was running.
+  - Not checked on the phone: Lock as a target (Home only, as you chose), a set time waiting for the
+    charger (unit tests cover it), the 15-minute check catching a scheduled theme switch (it needs a
+    real schedule), the live wallpaper's night album and battery rules (Paperize Debug stayed in
+    static mode), the Quick Settings tile while locked (HyperOS ignored a tile click over adb on the
+    lock screen), and the Chinese text.
+- Left on the phone: Paperize Debug in static mode with changing **paused**, Home on with "Phase6"
+  and night album "Night6" (night by set hours, 22:44–07:00), set times 07:00, 19:00 and 22:28,
+  screen off and unlock on (inactive while paused), gap None, "Only change while charging" off,
+  "Pause in battery saver" on, adaptive brightness off. Its listener channel is turned off in
+  Android's settings. While paused it changes nothing; its only alarm is the 07:00 day/night switch,
+  which just switches the album in use. Your home screen shows a Paperize Debug test image until
+  4.1.1's next change; the lock screen wasn't touched. Dark theme is on and battery saver off, as
+  before; the battery state was reset.
 
 ---
 

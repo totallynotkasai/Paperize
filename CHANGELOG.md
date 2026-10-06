@@ -71,6 +71,15 @@
 - "Custom effects for this album" gives an album its own brightness, blur, vignette and grey filter, used on every screen it is shown on, static or live. The Wallpaper tab says when an album's own effects replace its settings, and editing those settings no longer re-sets that album's wallpaper.
 - Home and Lock now have separate scaling choices when both are turned on.
 
+### Smarter scheduling
+- A "Schedule" choice on the Wallpaper tab: change every interval as before, or at set times of day (for example 07:00 and 19:00). Set times use battery-friendly alarms that need no special permission, so a change can come up to about 10 minutes after its time, or when the phone is next used if it was left asleep. Times are added and edited with a clock or by typing.
+- "More Scheduling Options" opens a screen with the new options and the card says which are on.
+- Night albums: each screen (or the live wallpaper) can use a different album at night. Night either runs between two clock times or follows the phone's dark theme. At the switch, screens with a night album change to it, and the next change after that always comes from the album in use.
+- Static mode can also change when the screen turns off and/or when the phone is unlocked, choosing which screens each changes and a minimum gap, so a screen that changed recently is left alone. Android requires a notification while Paperize listens for these. It is silent, but Android may still show its icon in the status bar, so the options screen has a one-tap way to turn it off; the changes keep working without it.
+- "Only change while charging" and "Pause in battery saver" hold back automatic changes (intervals, set times, the day/night switch, screen off and unlock, and the live wallpaper's short timer and screen-off change). Changing by hand with the button, tile, widgets, shortcut or double-tap always works. With "Only while charging", a change that falls due while unplugged happens once the phone is charging.
+- Static wallpapers with adaptive brightness are redrawn when the dark theme switches: within seconds when it is switched by hand, within 15 minutes when a schedule switches it, and at once while Paperize is open.
+- Set times and alarms are put back after a restart, an app update or a time-zone change, and a set time missed while the phone was off is caught up once.
+
 ## v4.2.0
 
 ### Library and albums
