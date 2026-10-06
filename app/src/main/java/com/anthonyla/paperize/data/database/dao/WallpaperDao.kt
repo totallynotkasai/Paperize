@@ -12,15 +12,6 @@ data class DirectWallpaperAccess(val id: String, val uri: String, val accessLost
 
 data class WallpaperUri(val id: String, val uri: String)
 
-/**
- * Rotation order: images added directly first, then each folder in its saved order. Image order
- * only has to be consistent within its own group, so new files can join the end of their group.
- */
-private const val ROTATION_ORDER = "w.folderId IS NOT NULL, f.displayOrder, f.id, w.displayOrder, w.id"
-
-/** Images that may rotate: still readable and not excluded by the user. */
-private const val ELIGIBLE = "w.accessLost = 0 AND w.excluded = 0"
-
 @Dao
 interface WallpaperDao {
     @Query("DELETE FROM wallpapers WHERE albumId = :albumId AND id IN (:ids)")
@@ -66,14 +57,36 @@ interface WallpaperDao {
     @Query("SELECT COUNT(*) FROM wallpapers WHERE albumId = :albumId")
     suspend fun getWallpaperCountByAlbum(albumId: String): Int
 
-    @Query("SELECT w.id FROM wallpapers w WHERE w.albumId = :albumId AND $ELIGIBLE")
+    @Query("SELECT COUNT(*) FROM wallpapers WHERE albumId = :albumId AND excluded = 0")
+    suspend fun getIncludedCountByAlbum(albumId: String): Int
+
+    /** Images a new round is built from (see [ROTATES]). */
+    @Query("SELECT w.id FROM wallpapers w WHERE w.albumId = :albumId AND $ROTATES")
     suspend fun getWallpaperIdsByAlbum(albumId: String): List<String>
 
     @Query("""
         SELECT w.id FROM wallpapers w LEFT JOIN folders f ON f.id = w.folderId
-        WHERE w.albumId = :albumId AND $ELIGIBLE ORDER BY $ROTATION_ORDER
+        WHERE w.albumId = :albumId AND $ROTATES ORDER BY $ROTATION_ORDER
     """)
     suspend fun getOrderedWallpaperIdsByAlbum(albumId: String): List<String>
+
+    @Query("SELECT w.id FROM wallpapers w WHERE w.albumId = :albumId AND $ELIGIBLE AND w.favorite = 1")
+    suspend fun getEligibleFavoriteIds(albumId: String): List<String>
+
+    @Query("SELECT $FAVORITES_ONLY_ACTIVE")
+    suspend fun rotatesFavoritesOnly(albumId: String): Boolean
+
+    @Query("SELECT id FROM wallpapers WHERE albumId = :albumId AND id IN (:ids) AND favorite = :favorite")
+    suspend fun getIdsByFavorite(albumId: String, ids: List<String>, favorite: Boolean): List<String>
+
+    @Query("SELECT id FROM wallpapers WHERE albumId = :albumId AND id IN (:ids) AND excluded = :excluded")
+    suspend fun getIdsByExcluded(albumId: String, ids: List<String>, excluded: Boolean): List<String>
+
+    @Query("UPDATE wallpapers SET favorite = :favorite WHERE albumId = :albumId AND id IN (:ids) AND favorite != :favorite")
+    suspend fun setFavorite(albumId: String, ids: List<String>, favorite: Boolean): Int
+
+    @Query("UPDATE wallpapers SET excluded = :excluded WHERE albumId = :albumId AND id IN (:ids) AND excluded != :excluded")
+    suspend fun setExcluded(albumId: String, ids: List<String>, excluded: Boolean): Int
 
     /** Every image in rotation order, including ones that can't rotate right now. */
     @Query("""

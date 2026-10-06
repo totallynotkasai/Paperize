@@ -91,14 +91,18 @@ data class ScheduleSettings(
                liveIntervalMinutes != other.liveIntervalMinutes
     }
 
-    /** Whether [screen]'s wallpaper is drawn differently, so its current image needs a re-render. */
-    fun hasDisplayChanges(other: ScheduleSettings, screen: ScreenType): Boolean = when (screen) {
+    /**
+     * Whether [screen]'s wallpaper is drawn differently, so its current image needs a re-render.
+     * [albumHasOwnEffects]: the screen's album uses its own effects (plan 5.3), so the screen's
+     * effects don't show and changing them changes nothing.
+     */
+    fun hasDisplayChanges(other: ScheduleSettings, screen: ScreenType, albumHasOwnEffects: Boolean = false): Boolean = when (screen) {
         ScreenType.HOME -> homeScalingType != other.homeScalingType ||
             homeScrollingEnabled != other.homeScrollingEnabled ||
-            homeEffects != other.homeEffects ||
+            (!albumHasOwnEffects && homeEffects != other.homeEffects) ||
             adaptiveBrightness != other.adaptiveBrightness
         ScreenType.LOCK -> lockScalingType != other.lockScalingType ||
-            lockEffects != other.lockEffects ||
+            (!albumHasOwnEffects && lockEffects != other.lockEffects) ||
             adaptiveBrightness != other.adaptiveBrightness
         ScreenType.LIVE -> liveScalingType != other.liveScalingType ||
             liveEffects != other.liveEffects ||

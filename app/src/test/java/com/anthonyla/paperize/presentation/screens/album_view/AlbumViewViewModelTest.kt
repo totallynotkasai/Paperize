@@ -1,6 +1,17 @@
 package com.anthonyla.paperize.presentation.screens.album_view
 
 import com.anthonyla.paperize.testing.emptyAlbum
+import com.anthonyla.paperize.testing.emptyFolder
+import com.anthonyla.paperize.testing.emptyWallpaper
+import com.anthonyla.paperize.core.ScreenType
+import com.anthonyla.paperize.core.WallpaperMode
+import com.anthonyla.paperize.core.constants.Constants
+import com.anthonyla.paperize.domain.model.ScheduleSettings
+import com.anthonyla.paperize.domain.model.WallpaperEffects
+import com.anthonyla.paperize.domain.repository.SettingsRepository
+import com.anthonyla.paperize.domain.usecase.MarkWallpapersUseCase
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
+import kotlinx.coroutines.launch
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
@@ -33,6 +44,9 @@ class AlbumViewViewModelTest {
     private val albums = mockk<AlbumRepository>()
     private val imports = mockk<ImportWallpapersUseCase>()
     private val delete = mockk<DeleteAlbumUseCase>()
+    private val marks = mockk<MarkWallpapersUseCase>()
+    private val settings = mockk<SettingsRepository>()
+    private val requests = mockk<WallpaperChangeRequests>(relaxed = true)
     private val store = ViewModelStore()
     private lateinit var viewModel: AlbumViewViewModel
 
@@ -42,6 +56,10 @@ class AlbumViewViewModelTest {
         every { Log.e(any(), any(), any()) } returns 0
         every { albums.getAlbumById("album") } returns flowOf(emptyAlbum("album"))
         coEvery { albums.syncAccess("album") } returns Result.Success(0)
+        every { settings.getWallpaperModeFlow() } returns flowOf(WallpaperMode.STATIC)
+        every { settings.getScheduleSettingsFlow() } returns flowOf(ScheduleSettings())
+        coEvery { settings.getWallpaperMode() } returns WallpaperMode.STATIC
+        coEvery { settings.getScheduleSettings() } returns ScheduleSettings()
         mockkStatic("androidx.navigation.SavedStateHandleKt")
         // Runs imports on the test's main dispatcher, so advanceUntilIdle drives them.
         albumImports = AlbumImports(imports, CoroutineScope(SupervisorJob() + Dispatchers.Main))
@@ -54,7 +72,120 @@ class AlbumViewViewModelTest {
     private fun albumViewModel(): AlbumViewViewModel {
         val savedState = SavedStateHandle()
         every { savedState.toRoute<AlbumRoute>() } returns AlbumRoute("album")
-        return AlbumViewViewModel(savedState, albums, imports, delete, albumImports)
+        return AlbumViewViewModel(savedState, albums, imports, delete, albumImports, marks, settings, requests)
+    }
+
+    /** One direct image, and a folder holding a favourite and a plain image. */
+    private fun albumWithFolder() = emptyAlbum("album").copy(
+        wallpapers = listOf(emptyWallpaper("direct", "album")),
+        folders = listOf(
+            emptyFolder("folder", "album").copy(
+                wallpapers = listOf(
+                    emptyWallpaper("in-folder-1", "album").copy(folderId = "folder", favorite = true),
+                    emptyWallpaper("in-folder-2", "album").copy(folderId = "folder")
+                )
+            )
+        )
+    )
+
+    @Test fun `marking a selection includes the images of selected folders`() = runTest {
+        every { albums.getAlbumById("album") } returns flowOf(albumWithFolder())
+        val vm = albumViewModel().also { store.put("marks", it) }
+        backgroundScope.launch { vm.selectionMarks.collect {} }
+        vm.toggleWallpaperSelection("direct")
+        vm.toggleFolderSelection("folder")
+        runCurrent()
+        assertEquals(SelectionMarks(images = 3, allFavorite = false, allExcluded = false), vm.selectionMarks.value)
+
+        coEvery { marks.setFavorite("album", any(), true) } returns Result.Success(2)
+        vm.setSelectionFavorite(true)
+        advanceUntilIdle()
+        coVerify(exactly = 1) { marks.setFavorite("album", listOf("direct", "in-folder-1", "in-folder-2"), true) }
+        assertTrue(vm.selectedWallpapers.value.isEmpty())
+        assertTrue(vm.selectedFolders.value.isEmpty())
+        assertEquals(UiText.Plural(R.plurals.marked_favorite, 3), vm.message.value)
+    }
+
+    @Test fun `a failed mark keeps the selection and says so`() = runTest {
+        every { albums.getAlbumById("album") } returns flowOf(albumWithFolder())
+        val vm = albumViewModel().also { store.put("marks", it) }
+        backgroundScope.launch { vm.selectionMarks.collect {} }
+        vm.toggleWallpaperSelection("in-folder-1")
+        runCurrent()
+        assertTrue(vm.selectionMarks.value.allFavorite)
+        coEvery { marks.setExcluded("album", listOf("in-folder-1"), true) } returns Result.Error(IllegalStateException())
+        vm.setSelectionExcluded(true)
+        advanceUntilIdle()
+        assertEquals(setOf("in-folder-1"), vm.selectedWallpapers.value)
+        assertEquals(UiText.Resource(R.string.mark_failed), vm.message.value)
+    }
+
+    @Test fun `changing the filter clears the selection`() = runTest {
+        viewModel.toggleWallpaperSelection("wallpaper")
+        viewModel.setFilter(ImageFilter.FAVORITES)
+        assertEquals(ImageFilter.FAVORITES, viewModel.filter.value)
+        assertTrue(viewModel.selectedWallpapers.value.isEmpty())
+        // Select all takes what the filtered grid shows.
+        viewModel.selectAll(listOf("a", "b"), emptyList())
+        assertEquals(setOf("a", "b"), viewModel.selectedWallpapers.value)
+    }
+
+    @Test fun `renaming reports a taken name and failures`() = runTest {
+        coEvery { albums.renameAlbum("album", "Cats") } returns Result.Success(true)
+        coEvery { albums.renameAlbum("album", "Dogs") } returns Result.Success(false)
+        coEvery { albums.renameAlbum("album", "Birds") } returns Result.Error(IllegalStateException())
+        assertEquals(RenameOutcome.RENAMED, viewModel.renameAlbum("Cats"))
+        assertEquals(RenameOutcome.NAME_TAKEN, viewModel.renameAlbum("Dogs"))
+        assertEquals(RenameOutcome.FAILED, viewModel.renameAlbum("Birds"))
+    }
+
+    @Test fun `album effects re-render only the screens showing the album, slider levels after a pause`() = runTest {
+        coEvery { settings.getScheduleSettings() } returns
+            ScheduleSettings(homeEnabled = true, lockEnabled = true, homeAlbumId = "album", lockAlbumId = "other")
+        coEvery { albums.setAlbumEffects("album", any()) } returns Result.Success(Unit)
+        viewModel.setCustomEffects(WallpaperEffects(enableBlur = true))
+        advanceUntilIdle()
+        verify(exactly = 1) { requests.reapplyEffects(ScreenType.HOME) }
+
+        viewModel.setCustomEffects(WallpaperEffects(enableBlur = true, blurPercentage = 40), deferRender = true)
+        viewModel.setCustomEffects(WallpaperEffects(enableBlur = true, blurPercentage = 60), deferRender = true)
+        runCurrent()
+        verify(exactly = 1) { requests.reapplyEffects(ScreenType.HOME) }
+        advanceTimeBy(Constants.SETTINGS_DEBOUNCE_MS + 1)
+        runCurrent()
+        verify(exactly = 2) { requests.reapplyEffects(ScreenType.HOME) }
+        verify(exactly = 0) { requests.reapplyEffects(ScreenType.LOCK) }
+        verify(exactly = 0) { requests.reapplyEffects(ScreenType.BOTH) }
+    }
+
+    @Test fun `a waiting re-render still happens when the album closes`() = runTest {
+        coEvery { settings.getScheduleSettings() } returns
+            ScheduleSettings(homeEnabled = true, lockEnabled = true, homeAlbumId = "album", lockAlbumId = "album")
+        coEvery { albums.setAlbumEffects("album", null) } returns Result.Success(Unit)
+        viewModel.setCustomEffects(null, deferRender = true)
+        runCurrent()
+        verify(exactly = 0) { requests.reapplyEffects(any()) }
+        store.clear()
+        verify(exactly = 1) { requests.reapplyEffects(ScreenType.BOTH) }
+    }
+
+    @Test fun `the live wallpaper follows album effects by itself`() = runTest {
+        coEvery { settings.getWallpaperMode() } returns WallpaperMode.LIVE
+        coEvery { settings.getScheduleSettings() } returns ScheduleSettings(liveAlbumId = "album")
+        coEvery { albums.setAlbumEffects("album", any()) } returns Result.Success(Unit)
+        viewModel.setCustomEffects(WallpaperEffects(enableDarken = true))
+        advanceUntilIdle()
+        verify(exactly = 0) { requests.reapplyEffects(any()) }
+    }
+
+    @Test fun `custom effects start from the effects of the screen showing the album`() = runTest {
+        coEvery { settings.getScheduleSettings() } returns ScheduleSettings(
+            lockEnabled = true, lockAlbumId = "album",
+            homeEffects = WallpaperEffects(enableBlur = true),
+            lockEffects = WallpaperEffects(enableDarken = true, darkenPercentage = 70, enableDoubleTap = true)
+        )
+        // Only the visual effects; interactive ones stay with the screen.
+        assertEquals(WallpaperEffects(enableDarken = true, darkenPercentage = 70), viewModel.startingEffects())
     }
 
     @After fun tearDown() {

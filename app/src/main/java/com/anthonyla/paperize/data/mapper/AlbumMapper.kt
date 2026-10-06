@@ -79,5 +79,6 @@ fun AlbumSummaryEntity.toDomainModel(): AlbumSummary =
         wallpaperCount = wallpaperCount,
         folderCount = folderCount,
         createdAt = createdAt,
-        modifiedAt = modifiedAt
+        modifiedAt = modifiedAt,
+        hasCustomEffects = hasCustomEffects
     )

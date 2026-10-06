@@ -1,9 +1,11 @@
 package com.anthonyla.paperize.domain.repository
 
+import com.anthonyla.paperize.core.FavoritesMode
 import com.anthonyla.paperize.core.Result
 import com.anthonyla.paperize.domain.model.Album
 import com.anthonyla.paperize.domain.model.AlbumSummary
 import com.anthonyla.paperize.domain.model.Wallpaper
+import com.anthonyla.paperize.domain.model.WallpaperEffects
 import com.anthonyla.paperize.domain.model.Folder
 import kotlinx.coroutines.flow.Flow
 
@@ -11,8 +13,6 @@ interface AlbumRepository {
     fun getAlbumSummaries(): Flow<List<AlbumSummary>>
 
     fun getAlbumById(albumId: String): Flow<Album?>
-
-    suspend fun getAlbumByName(name: String): Album?
 
     fun getFolderById(folderId: String): Flow<Folder?>
 
@@ -60,4 +60,27 @@ interface AlbumRepository {
 
     /** Point an image at a newly granted copy of the same file and mark it readable. */
     suspend fun relinkWallpaper(wallpaperId: String, uri: String): Result<Unit>
+
+    /** Whether an album other than [exceptAlbumId] is called [name], ignoring case and outer spaces. */
+    suspend fun isAlbumNameTaken(name: String, exceptAlbumId: String? = null): Boolean
+
+    /** Returns false, and keeps the old name, when another album already has [name]. */
+    suspend fun renameAlbum(albumId: String, name: String): Result<Boolean>
+
+    /** Returns the images whose mark actually changed. */
+    suspend fun setFavorite(albumId: String, wallpaperIds: Collection<String>, favorite: Boolean): Result<List<String>>
+
+    /** Returns the images whose mark actually changed. Excluded images never rotate. */
+    suspend fun setExcluded(albumId: String, wallpaperIds: Collection<String>, excluded: Boolean): Result<List<String>>
+
+    /** A new mode starts a new rotation round for every screen. Returns false if it was already set. */
+    suspend fun setFavoritesMode(albumId: String, mode: FavoritesMode): Result<Boolean>
+
+    /** The album's own effects, or null when the screen's effects apply (plan 5.3). */
+    suspend fun getAlbumEffects(albumId: String): WallpaperEffects?
+
+    fun getAlbumEffectsFlow(albumId: String): Flow<WallpaperEffects?>
+
+    /** Null goes back to the screen's own effects. */
+    suspend fun setAlbumEffects(albumId: String, effects: WallpaperEffects?): Result<Unit>
 }

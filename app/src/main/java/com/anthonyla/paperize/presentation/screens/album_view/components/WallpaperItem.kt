@@ -22,8 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import com.anthonyla.paperize.R
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -35,6 +33,10 @@ import coil3.request.ImageRequest
 import coil3.size.Size
 import com.anthonyla.paperize.presentation.theme.AppSpacing
 
+/**
+ * An image in an album or folder grid. A favourite and an image excluded from rotation carry small
+ * marks in the lower corner; excluded images are also dimmed. Screen readers hear one label.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WallpaperItem(
@@ -45,10 +47,12 @@ fun WallpaperItem(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    unavailable: Boolean = false
+    unavailable: Boolean = false,
+    favorite: Boolean = false,
+    excluded: Boolean = false
 ) {
     val context = LocalContext.current
-    val description = if (unavailable) stringResource(R.string.content_desc_unavailable, wallpaperName) else wallpaperName
+    val description = imageDescription(wallpaperName, favorite, excluded, unavailable)
 
     val transition = updateTransition(isSelected, label = "WallpaperItemSelection")
     val paddingTransition by transition.animateDp(label = "padding") { selected ->
@@ -91,11 +95,14 @@ fun WallpaperItem(
                 alpha = when {
                     isSelected -> 0.7f
                     unavailable -> UNAVAILABLE_ALPHA
+                    excluded -> EXCLUDED_ALPHA
                     else -> 1f
                 }
             )
 
             if (unavailable) UnavailableBadge(null, Modifier.align(Alignment.TopStart).padding(AppSpacing.small))
+
+            MarkBadges(favorite, excluded, Modifier.align(Alignment.BottomStart).padding(AppSpacing.small))
 
             if (isSelectionMode) {
                 Icon(

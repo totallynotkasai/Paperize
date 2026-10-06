@@ -14,6 +14,55 @@ object QueueBuilder {
     }
 
     /**
+     * A shuffled round in which each of [favorites] comes up twice and every other image once
+     * ("Show more often"). The round is two shuffled halves that each hold every favourite and half
+     * of the others, so a favourite's two turns are spread apart; the same image never comes up
+     * twice in a row where the halves meet.
+     */
+    fun weightedShuffle(ids: List<String>, favorites: Set<String>, random: Random = Random.Default): List<String> {
+        val favored = ids.filter { it in favorites }
+        // With no favourites, or only favourites, every image is equally likely anyway.
+        if (favored.isEmpty() || favored.size == ids.size) return ids.shuffled(random)
+        val others = ids.filterNot { it in favorites }.shuffled(random)
+        val half = (others.size + random.nextInt(2)) / 2
+        val first = (favored + others.take(half)).shuffled(random).toMutableList()
+        val second = (favored + others.drop(half)).shuffled(random).toMutableList()
+        if (second.first() == first.last()) {
+            val inSecond = (1 until second.size).firstOrNull { second[it] != first.last() }
+            if (inSecond != null) {
+                second.swap(0, inSecond)
+            } else {
+                (first.lastIndex - 1 downTo 0).firstOrNull { first[it] != second.first() }
+                    ?.let { first.swap(first.lastIndex, it) }
+            }
+        }
+        return first + second
+    }
+
+    private fun MutableList<String>.swap(a: Int, b: Int) {
+        this[a] = this[b].also { this[b] = this[a] }
+    }
+
+    /**
+     * A round in progress after [ids] became favourites in "Show more often": each gets one more
+     * turn at a random place, so it still comes up twice as often as the rest this round.
+     */
+    fun addExtraTurns(queue: List<String>, ids: Collection<String>, random: Random = Random.Default): List<String> {
+        val merged = queue.toMutableList()
+        ids.forEach { merged.add(random.nextInt(merged.size + 1), it) }
+        return merged
+    }
+
+    /** A round in progress after [ids] stopped being favourites: a second queued turn is dropped. */
+    fun removeExtraTurns(queue: List<String>, ids: Collection<String>): List<String> {
+        val result = queue.toMutableList()
+        ids.toSet().forEach { id ->
+            if (result.count { it == id } > 1) result.removeAt(result.lastIndexOf(id))
+        }
+        return result
+    }
+
+    /**
      * Add [newIds] to a queue that is part-way through its round, keeping the progress made so far.
      *
      * A shuffled queue takes each new image at a random place. A sequential queue puts it straight

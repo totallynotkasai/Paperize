@@ -69,7 +69,13 @@ fun FolderItem(
 ) {
     val context = LocalContext.current
     val count = folder.wallpapers.size
-    val countText = pluralStringResource(R.plurals.wallpaper_count, count, count)
+    val excludedCount = folder.wallpapers.count { it.excluded }
+    val allExcluded = count > 0 && excludedCount == count
+    // "12 wallpapers · 3 excluded" once some of the folder's images are excluded from rotation.
+    val countText = pluralStringResource(R.plurals.wallpaper_count, count, count).let { total ->
+        if (excludedCount == 0) total
+        else stringResource(R.string.count_with_excluded, total, pluralStringResource(R.plurals.excluded_count, excludedCount, excludedCount))
+    }
     val description = stringResource(R.string.content_desc_folder, folder.displayName, countText) +
         if (unavailable) ", " + stringResource(R.string.unavailable) else ""
 
@@ -93,6 +99,7 @@ fun FolderItem(
     val contentAlpha = when {
         isSelected -> 0.7f
         unavailable -> UNAVAILABLE_ALPHA
+        allExcluded -> EXCLUDED_ALPHA
         else -> 1f
     }
 

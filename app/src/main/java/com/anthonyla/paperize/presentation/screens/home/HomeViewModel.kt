@@ -39,7 +39,7 @@ import javax.inject.Inject
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    albumRepository: AlbumRepository,
+    private val albumRepository: AlbumRepository,
     private val createAlbumUseCase: CreateAlbumUseCase,
     private val settingsRepository: SettingsRepository,
     private val wallpaperScheduler: WallpaperScheduler,
@@ -246,9 +246,13 @@ class HomeViewModel @Inject constructor(
             } else emptySet()
             changeStaticScreensNow(newlyRotating)
 
-            // Effects apply while paused too; the screens changed above already use them.
-            val toRender = validated.rotatingStaticScreens()
-                .filter { validated.hasDisplayChanges(currentSettings, it) } - newlyRotating
+            // Effects apply while paused too; the screens changed above already use them. A screen
+            // whose album has its own effects doesn't show the screen's effects, so editing those
+            // doesn't set its wallpaper again.
+            val toRender = validated.rotatingStaticScreens().filter { screen ->
+                val ownEffects = validated.albumFor(screen)?.let { albumRepository.getAlbumEffects(it) } != null
+                validated.hasDisplayChanges(currentSettings, screen, albumHasOwnEffects = ownEffects)
+            } - newlyRotating
             if (deferRender) {
                 deferRender(toRender)
             } else {

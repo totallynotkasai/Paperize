@@ -25,6 +25,25 @@ data class WallpaperEffects(
     /** Seconds for one pass from one edge of the image to the other. */
     val autoPanSweepSeconds: Int = Constants.DEFAULT_AUTO_PAN_SWEEP_SECONDS
 ) {
+    /**
+     * These effects with an album's own visual effects in place of this screen's (plan 5.3). The
+     * live wallpaper's interactive settings (double-tap, screen off, parallax, auto-pan) belong to
+     * the screen, not the album, so they are kept.
+     */
+    fun withAlbumEffects(album: WallpaperEffects?): WallpaperEffects = if (album == null) this else copy(
+        enableBlur = album.enableBlur,
+        blurPercentage = album.blurPercentage,
+        enableDarken = album.enableDarken,
+        darkenPercentage = album.darkenPercentage,
+        enableVignette = album.enableVignette,
+        vignettePercentage = album.vignettePercentage,
+        enableGrayscale = album.enableGrayscale,
+        grayscalePercentage = album.grayscalePercentage
+    )
+
+    /** Only the visual effects, for an album's own settings. */
+    fun visualOnly(): WallpaperEffects = WallpaperEffects().withAlbumEffects(this)
+
     fun validate(): WallpaperEffects = copy(
         darkenPercentage = darkenPercentage.coerceIn(0, 100),
         blurPercentage = blurPercentage.coerceIn(0, 100),

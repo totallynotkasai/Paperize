@@ -2,15 +2,19 @@ package com.anthonyla.paperize.data.repository
 
 import android.util.Log
 import androidx.room.withTransaction
+import com.anthonyla.paperize.core.FavoritesMode
 import com.anthonyla.paperize.core.Result
 import com.anthonyla.paperize.core.util.generateId
 import com.anthonyla.paperize.data.database.PaperizeDatabase
+import com.anthonyla.paperize.data.mapper.decodeAlbumEffects
+import com.anthonyla.paperize.data.mapper.encodeAlbumEffects
 import com.anthonyla.paperize.data.mapper.toDomainModel
 import com.anthonyla.paperize.data.mapper.toEntity
 import com.anthonyla.paperize.domain.model.Album
 import com.anthonyla.paperize.domain.model.AlbumSummary
 import com.anthonyla.paperize.domain.model.Folder
 import com.anthonyla.paperize.domain.model.Wallpaper
+import com.anthonyla.paperize.domain.model.WallpaperEffects
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.source.DocumentSource
 import javax.inject.Inject
@@ -18,6 +22,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -40,9 +45,6 @@ class AlbumRepositoryImpl @Inject constructor(
 
     override fun getAlbumById(albumId: String): Flow<Album?> =
         albumDao.getAlbumWithDetails(albumId).map { it?.toDomainModel() }
-
-    override suspend fun getAlbumByName(name: String): Album? =
-        albumDao.getAlbumByName(name)?.toDomainModel()
 
     override fun getFolderById(folderId: String): Flow<Folder?> =
         folderDao.getFolderWithWallpapers(folderId).map { it?.toDomainModel() }
@@ -262,6 +264,69 @@ class AlbumRepositoryImpl @Inject constructor(
 
     override suspend fun relinkWallpaper(wallpaperId: String, uri: String): Result<Unit> = Result.runCatching {
         wallpaperDao.relink(wallpaperId, uri)
+    }
+
+    override suspend fun isAlbumNameTaken(name: String, exceptAlbumId: String?): Boolean {
+        val wanted = name.trim()
+        return albumDao.getAlbumNames().any { it.id != exceptAlbumId && it.name.trim().equals(wanted, ignoreCase = true) }
+    }
+
+    override suspend fun renameAlbum(albumId: String, name: String): Result<Boolean> = Result.runCatching {
+        val newName = name.trim()
+        require(newName.isNotEmpty()) { "Album name cannot be empty" }
+        database.withTransaction {
+            if (isAlbumNameTaken(newName, exceptAlbumId = albumId)) return@withTransaction false
+            check(albumDao.renameAlbum(albumId, newName) == 1) { "Album $albumId not found" }
+            true
+        }
+    }
+
+    override suspend fun setFavorite(
+        albumId: String,
+        wallpaperIds: Collection<String>,
+        favorite: Boolean
+    ): Result<List<String>> = Result.runCatching {
+        database.withTransaction {
+            wallpaperIds.distinct().chunked(WALLPAPER_BATCH_SIZE).flatMap { chunk ->
+                wallpaperDao.getIdsByFavorite(albumId, chunk, !favorite).also { changed ->
+                    if (changed.isNotEmpty()) wallpaperDao.setFavorite(albumId, changed, favorite)
+                }
+            }
+        }
+    }
+
+    override suspend fun setExcluded(
+        albumId: String,
+        wallpaperIds: Collection<String>,
+        excluded: Boolean
+    ): Result<List<String>> = Result.runCatching {
+        database.withTransaction {
+            wallpaperIds.distinct().chunked(WALLPAPER_BATCH_SIZE).flatMap { chunk ->
+                wallpaperDao.getIdsByExcluded(albumId, chunk, !excluded).also { changed ->
+                    if (changed.isNotEmpty()) wallpaperDao.setExcluded(albumId, changed, excluded)
+                }
+            }
+        }
+    }
+
+    override suspend fun setFavoritesMode(albumId: String, mode: FavoritesMode): Result<Boolean> = Result.runCatching {
+        database.withTransaction {
+            val changed = albumDao.setFavoritesMode(albumId, mode) > 0
+            // Which images rotate, and how often, depends on the mode: every screen starts a new
+            // round, as it does when the album is reordered.
+            if (changed) database.wallpaperQueueDao().clearAllQueues(albumId)
+            changed
+        }
+    }
+
+    override suspend fun getAlbumEffects(albumId: String): WallpaperEffects? =
+        decodeAlbumEffects(albumDao.getEffects(albumId))
+
+    override fun getAlbumEffectsFlow(albumId: String): Flow<WallpaperEffects?> =
+        albumDao.getEffectsFlow(albumId).distinctUntilChanged().map { decodeAlbumEffects(it) }
+
+    override suspend fun setAlbumEffects(albumId: String, effects: WallpaperEffects?): Result<Unit> = Result.runCatching {
+        albumDao.setEffects(albumId, encodeAlbumEffects(effects?.validate()))
     }
 
     /**

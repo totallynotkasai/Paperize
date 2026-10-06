@@ -52,9 +52,12 @@ class ChangeWallpaperUseCase @Inject constructor(
                     ?: avoidId?.let { wallpaperRepository.getAndDequeueWallpaper(albumId, screenType) }
                     ?: throw if (wallpaperRepository.countWallpapers(albumId) == 0) {
                         EmptyAlbumException(context.getString(R.string.no_wallpapers_in_album))
+                    } else if (wallpaperRepository.countIncludedWallpapers(albumId) == 0) {
+                        // Keep the album selected, so including an image again resumes the rotation.
+                        NoValidWallpaperException(context.getString(R.string.error_all_wallpapers_excluded))
                     } else {
-                        // Every image is unreadable or excluded; keep the album selected so restoring
-                        // access resumes the rotation.
+                        // Every image that isn't excluded is unreadable; keep the album selected so
+                        // restoring access resumes the rotation.
                         NoValidWallpaperException(context.getString(R.string.error_no_available_wallpapers))
                     }
             }
@@ -93,15 +96,21 @@ class ChangeWallpaperUseCase @Inject constructor(
         albumId = prepared.albumId,
         screenType = screenType,
         wallpaperId = prepared.wallpaperId,
-        shuffle = prepared.shuffle
+        shuffle = prepared.shuffle,
+        takenFromQueue = screenType == prepared.screenType
     )
 
-    /** Record a user-selected wallpaper and remove that exact item from the next-change queue. */
+    /**
+     * Record a user-selected wallpaper and remove that exact item from the next-change queue.
+     * [takenFromQueue]: the image was already dequeued from this screen's round, so a second queued
+     * turn of it (a favourite in "Show more often") is kept.
+     */
     suspend fun completeSpecific(
         albumId: String,
         screenType: ScreenType,
         wallpaperId: String,
-        shuffle: Boolean
+        shuffle: Boolean,
+        takenFromQueue: Boolean = false
     ) {
         try {
             wallpaperRepository.setCurrentWallpaper(
@@ -118,15 +127,19 @@ class ChangeWallpaperUseCase @Inject constructor(
 
         try {
             val startHalfway = startsHalfway(settingsRepository.getScheduleSettings(), albumId, screenType)
+            val roundInProgress = takenFromQueue &&
+                wallpaperRepository.getNextWallpaperInQueue(albumId, screenType) != null
             wallpaperRepository.ensureWallpaperQueue(albumId, screenType, shuffle, startHalfway).getOrThrow()
             // Build first when this is the first synchronized use of a screen queue, then remove
             // the exact applied item. This prevents the just-applied wallpaper from being
             // reintroduced at the head of a freshly built queue.
-            wallpaperRepository.removeWallpaperFromQueue(
-                albumId,
-                screenType,
-                wallpaperId
-            )
+            if (!roundInProgress) {
+                wallpaperRepository.removeWallpaperFromQueue(
+                    albumId,
+                    screenType,
+                    wallpaperId
+                )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

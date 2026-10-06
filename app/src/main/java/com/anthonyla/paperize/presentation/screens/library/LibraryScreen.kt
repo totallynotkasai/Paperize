@@ -35,7 +35,7 @@ import com.anthonyla.paperize.R
 import com.anthonyla.paperize.core.Result
 import com.anthonyla.paperize.domain.model.Album
 import com.anthonyla.paperize.domain.model.AlbumSummary
-import com.anthonyla.paperize.presentation.common.components.AddAlbumDialog
+import com.anthonyla.paperize.presentation.common.components.AlbumNameDialog
 import com.anthonyla.paperize.presentation.screens.library.components.AlbumItem
 import com.anthonyla.paperize.presentation.theme.AppGrid
 import com.anthonyla.paperize.presentation.theme.AppSpacing
@@ -49,7 +49,7 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val lazyListState = rememberLazyGridState()
-    var showAddAlbumDialog by rememberSaveable { mutableStateOf(false) }
+    var showAlbumNameDialog by rememberSaveable { mutableStateOf(false) }
     var albumNameError by rememberSaveable { mutableStateOf<Int?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -60,7 +60,7 @@ fun LibraryScreen(
             LargeFloatingActionButton(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                onClick = { showAddAlbumDialog = true },
+                onClick = { showAlbumNameDialog = true },
                 shape = MaterialTheme.shapes.large
             ) {
                 Icon(
@@ -125,10 +125,10 @@ fun LibraryScreen(
         }
     }
 
-    if (showAddAlbumDialog) {
-        AddAlbumDialog(
+    if (showAlbumNameDialog) {
+        AlbumNameDialog(
             onDismiss = {
-                showAddAlbumDialog = false
+                showAlbumNameDialog = false
                 albumNameError = null
             },
             onConfirm = { name ->
@@ -140,7 +140,7 @@ fun LibraryScreen(
                     scope.launch {
                         try {
                             when (onCreateAlbum(name)) {
-                                is Result.Success -> showAddAlbumDialog = false
+                                is Result.Success -> showAlbumNameDialog = false
                                 is Result.Error -> albumNameError = R.string.album_create_failed
                             }
                         } finally {

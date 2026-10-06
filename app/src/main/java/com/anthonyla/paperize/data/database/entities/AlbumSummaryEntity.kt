@@ -7,5 +7,6 @@ data class AlbumSummaryEntity(
     val wallpaperCount: Int,
     val folderCount: Int,
     val createdAt: Long,
-    val modifiedAt: Long
+    val modifiedAt: Long,
+    val hasCustomEffects: Boolean = false
 )

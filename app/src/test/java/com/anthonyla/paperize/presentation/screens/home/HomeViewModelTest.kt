@@ -3,11 +3,13 @@ package com.anthonyla.paperize.presentation.screens.home
 import com.anthonyla.paperize.testing.emptyAlbumSummary
 import android.content.Context
 import androidx.lifecycle.ViewModelStore
+import com.anthonyla.paperize.core.ScalingType
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.domain.model.AppSettings
 import com.anthonyla.paperize.domain.model.ScheduleSettings
+import com.anthonyla.paperize.domain.model.WallpaperEffects
 import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
@@ -42,6 +44,7 @@ class HomeViewModelTest {
     @Before fun setUp() {
         Dispatchers.setMain(StandardTestDispatcher())
         every { albums.getAlbumSummaries() } returns flowOf(emptyList())
+        coEvery { albums.getAlbumEffects(any()) } returns null
         every { settings.getScheduleSettingsFlow() } returns stored
         every { settings.getAppSettingsFlow() } returns flowOf(AppSettings())
         every { settings.getWallpaperModeFlow() } returns flowOf(WallpaperMode.STATIC)
@@ -131,6 +134,17 @@ class HomeViewModelTest {
         advanceUntilIdle()
         verify(exactly = 1) { requests.reapplyEffects(ScreenType.LOCK) }
         verify(exactly = 0) { requests.change(any(), any()) }
+    }
+
+    @Test fun `a screen whose album has its own effects ignores edits to the screen's effects`() = runTest {
+        coEvery { albums.getAlbumEffects("old") } returns WallpaperEffects(enableGrayscale = true)
+        viewModel.updateScheduleSettings(stored.value.copy(homeEffects = stored.value.homeEffects.copy(enableBlur = true)))
+        advanceUntilIdle()
+        verify(exactly = 0) { requests.reapplyEffects(any()) }
+        // Scaling still applies to that album.
+        viewModel.updateScheduleSettings(stored.value.copy(homeScalingType = ScalingType.FIT))
+        advanceUntilIdle()
+        verify(exactly = 1) { requests.reapplyEffects(ScreenType.HOME) }
     }
 
     @Test fun `slider levels are saved at once and render once after the edits settle`() = runTest {

@@ -11,6 +11,9 @@ interface WallpaperRepository {
     /** Every image in the album, including ones that cannot rotate right now. */
     suspend fun countWallpapers(albumId: String): Int
 
+    /** Images the user hasn't excluded, readable or not. */
+    suspend fun countIncludedWallpapers(albumId: String): Int
+
     suspend fun getNextWallpaperInQueue(albumId: String, screenType: ScreenType): Wallpaper?
 
     /**
@@ -20,6 +23,7 @@ interface WallpaperRepository {
      */
     suspend fun getAndDequeueWallpaper(albumId: String, screenType: ScreenType, avoidId: String? = null): Wallpaper?
 
+    /** Removes the first queued turn of [wallpaperId]; a favourite's second turn stays. */
     suspend fun removeWallpaperFromQueue(
         albumId: String,
         screenType: ScreenType,
@@ -39,6 +43,8 @@ interface WallpaperRepository {
      * Start a new round once nothing but [avoidId] is left to rotate; preserve a queue already
      * filled by another caller. Each screen shuffles on its own. [startHalfway] starts a sequential
      * round half-way through the album (a lock screen sharing the home screen's album).
+     * A round holds the images that rotate (not excluded, and only favourites while "Favourites
+     * only" is in effect); a shuffled round in "Show more often" holds each favourite twice.
      */
     suspend fun ensureWallpaperQueue(
         albumId: String,
@@ -53,6 +59,24 @@ interface WallpaperRepository {
      * so the progress made so far survives. [wallpaperIds] not in the album are ignored.
      */
     suspend fun addToQueues(albumId: String, wallpaperIds: Collection<String>, shuffle: Boolean): Result<Unit>
+
+    /**
+     * Keep the rounds in progress in line after [wallpaperIds] became favourites ([favorite]) or
+     * stopped being ones: in "Show more often" (while shuffling) each gains or loses its extra turn;
+     * in "Favourites only" new favourites join the round.
+     */
+    suspend fun favoritesChanged(
+        albumId: String,
+        wallpaperIds: Collection<String>,
+        favorite: Boolean,
+        shuffle: Boolean
+    ): Result<Unit>
+
+    /** The album rotates only its favourites right now ("Favourites only" with a usable favourite). */
+    suspend fun rotatesFavoritesOnly(albumId: String): Boolean
+
+    /** Start a new round on every screen of [albumId]. */
+    suspend fun clearQueues(albumId: String): Result<Unit>
 
     /**
      * Clear all queues for all albums

@@ -5,6 +5,21 @@ import org.junit.Test
 
 class WallpaperEffectsTest {
     @Test
+    fun `an album's effects replace the visual effects and keep the screen's interactive ones`() {
+        val live = WallpaperEffects(
+            enableBlur = true, blurPercentage = 80, enableDoubleTap = true, enableParallax = true,
+            parallaxIntensity = 30, enableAutoPan = true, autoPanSweepSeconds = 20
+        )
+        val album = WallpaperEffects(enableGrayscale = true, grayscalePercentage = 40, enableDoubleTap = false)
+        assertEquals(
+            live.copy(enableBlur = false, blurPercentage = album.blurPercentage, enableGrayscale = true, grayscalePercentage = 40),
+            live.withAlbumEffects(album)
+        )
+        assertEquals(live, live.withAlbumEffects(null))
+        assertEquals(WallpaperEffects(enableBlur = true, blurPercentage = 80), live.visualOnly())
+    }
+
+    @Test
     fun `auto-pan speed stays within the slider's range`() {
         assertEquals(300, WallpaperEffects(autoPanSweepSeconds = 3600).validate().autoPanSweepSeconds)
         assertEquals(10, WallpaperEffects(autoPanSweepSeconds = 0).validate().autoPanSweepSeconds)

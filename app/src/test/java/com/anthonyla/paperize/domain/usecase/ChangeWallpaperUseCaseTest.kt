@@ -15,7 +15,9 @@ import com.anthonyla.paperize.domain.repository.WallpaperRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
+import io.mockk.every
 import io.mockk.mockk
+import com.anthonyla.paperize.R
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -132,9 +134,53 @@ class ChangeWallpaperUseCaseTest {
         coEvery { repository.getAndDequeueWallpaper("album", ScreenType.HOME) } returns null
         coEvery { repository.ensureWallpaperQueue("album", ScreenType.HOME, any()) } returns Result.Success(Unit)
         coEvery { repository.countWallpapers("album") } returns 3
+        coEvery { repository.countIncludedWallpapers("album") } returns 3
 
         // Not EmptyAlbumException, which would clear the album selection and turn changing off.
         assertTrue((useCase("album", ScreenType.HOME) as Result.Error).exception is NoValidWallpaperException)
+    }
+
+    @Test
+    fun `an album whose images are all excluded says so and keeps its selection`() = runTest {
+        val context = mockk<Context> {
+            every { getString(R.string.error_all_wallpapers_excluded) } returns "all excluded"
+        }
+        val excludedUseCase = ChangeWallpaperUseCase(context, repository, mockk(relaxed = true), renderer)
+        coEvery { repository.getAndDequeueWallpaper("album", ScreenType.HOME) } returns null
+        coEvery { repository.ensureWallpaperQueue("album", ScreenType.HOME, any()) } returns Result.Success(Unit)
+        coEvery { repository.countWallpapers("album") } returns 3
+        coEvery { repository.countIncludedWallpapers("album") } returns 0
+
+        val error = (excludedUseCase("album", ScreenType.HOME) as Result.Error).exception
+        assertTrue(error is NoValidWallpaperException)
+        assertEquals("all excluded", error.message)
+    }
+
+    @Test
+    fun `completing keeps a second turn of the shown image while its round goes on`() = runTest {
+        val prepared = preparedWallpaper()
+        coEvery { repository.getNextWallpaperInQueue("album", ScreenType.HOME) } returns emptyWallpaper("next", "album")
+        coEvery { repository.ensureWallpaperQueue("album", ScreenType.HOME, false) } returns Result.Success(Unit)
+
+        useCase.complete(prepared)
+
+        coVerify(exactly = 1) { repository.setCurrentWallpaper("album", ScreenType.HOME, "wallpaper") }
+        // The shown turn was taken from this queue; a favourite's other turn stays queued.
+        coVerify(exactly = 0) { repository.removeWallpaperFromQueue(any(), any(), any()) }
+    }
+
+    @Test
+    fun `completing the last image of a round keeps it out of the next round's start`() = runTest {
+        val prepared = preparedWallpaper()
+        coEvery { repository.getNextWallpaperInQueue("album", ScreenType.HOME) } returns null
+        coEvery { repository.ensureWallpaperQueue("album", ScreenType.HOME, false) } returns Result.Success(Unit)
+
+        useCase.complete(prepared)
+
+        coVerifyOrder {
+            repository.ensureWallpaperQueue("album", ScreenType.HOME, false)
+            repository.removeWallpaperFromQueue("album", ScreenType.HOME, "wallpaper")
+        }
     }
 
     private val sharedAlbum = ScheduleSettings(homeEnabled = true, lockEnabled = true, homeAlbumId = "album", lockAlbumId = "album")

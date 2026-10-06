@@ -9,19 +9,23 @@ import androidx.compose.ui.res.stringResource
 import com.anthonyla.paperize.R
 import com.anthonyla.paperize.presentation.theme.AppSpacing
 
+/** Asks for an album's name: a new album's, or a new name for [initialName] (renaming). */
 @Composable
-fun AddAlbumDialog(
+fun AlbumNameDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
     modifier: Modifier = Modifier,
+    title: String = stringResource(R.string.add_album),
+    initialName: String = "",
     errorMessage: String? = null,
     isSaving: Boolean = false
 ) {
-    var albumName by rememberSaveable { mutableStateOf("") }
+    var albumName by rememberSaveable { mutableStateOf(initialName) }
+    val unchanged = initialName.isNotEmpty() && albumName.trim() == initialName
 
     AlertDialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
-        title = { Text(stringResource(R.string.add_album)) },
+        title = { Text(title) },
         text = {
             Column {
                 Text(stringResource(R.string.enter_the_name_of_the_album))
@@ -43,7 +47,7 @@ fun AddAlbumDialog(
         confirmButton = {
             TextButton(
                 onClick = { onConfirm(albumName.trim()) },
-                enabled = !isSaving && albumName.isNotBlank()
+                enabled = !isSaving && albumName.isNotBlank() && !unchanged
             ) {
                 Text(stringResource(R.string.save))
             }

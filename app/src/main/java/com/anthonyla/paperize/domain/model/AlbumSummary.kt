@@ -12,5 +12,7 @@ data class AlbumSummary(
     val wallpaperCount: Int,
     val folderCount: Int,
     val createdAt: Long,
-    val modifiedAt: Long
+    val modifiedAt: Long,
+    /** The album has its own effects, which replace the screen's (plan 5.3). */
+    val hasCustomEffects: Boolean = false
 )

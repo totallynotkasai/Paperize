@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.R
 import com.anthonyla.paperize.core.ScalingType
+import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.domain.model.AlbumSummary
 import com.anthonyla.paperize.domain.model.AppSettings
@@ -143,7 +145,12 @@ fun WallpaperScreen(
         ScalingType.STRETCH to stringResource(R.string.stretch),
         ScalingType.NONE to stringResource(R.string.none)
     )
-    val selectedScaling = if (wallpaperMode == WallpaperMode.LIVE) scheduleSettings.liveScalingType else scheduleSettings.homeScalingType
+    // Albums shown right now that use their own effects instead of these (plan 5.3).
+    val albumsWithOwnEffects = remember(albums, scheduleSettings, wallpaperMode) {
+        val shown = if (wallpaperMode == WallpaperMode.LIVE) listOfNotNull(scheduleSettings.liveAlbumId)
+            else listOfNotNull(scheduleSettings.albumFor(ScreenType.HOME), scheduleSettings.albumFor(ScreenType.LOCK))
+        shown.distinct().mapNotNull { id -> albums.find { it.id == id && it.hasCustomEffects }?.name }
+    }
 
     Column(
         modifier = modifier
@@ -295,6 +302,14 @@ fun WallpaperScreen(
                 modifier = Modifier.padding(horizontal = AppSpacing.large)
             )
         }
+        albumsWithOwnEffects.forEach { name ->
+            Text(
+                text = stringResource(R.string.album_uses_own_effects, name),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = AppSpacing.large)
+            )
+        }
         Card(
             shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(
@@ -316,35 +331,42 @@ fun WallpaperScreen(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    scalingOptions.forEachIndexed { index, (scalingType, label) ->
-                        SegmentedButton(
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = index,
-                                count = scalingOptions.size
-                            ),
-                            onClick = {
-                                updateSettingsImmediate(
-                                    if (wallpaperMode == WallpaperMode.LIVE) {
-                                        scheduleSettings.copy(liveScalingType = scalingType)
-                                    } else {
-                                        scheduleSettings.copy(
-                                            homeScalingType = scalingType,
-                                            lockScalingType = scalingType
-                                        )
-                                    }
-                                )
-                            },
-                            selected = scalingType == selectedScaling,
-                            enabled = effectsEnabled
-                        ) {
-                            Text(
-                                text = label,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                when {
+                    wallpaperMode == WallpaperMode.LIVE -> ScalingChoices(
+                        options = scalingOptions,
+                        selected = scheduleSettings.liveScalingType,
+                        enabled = true,
+                        onSelect = { updateSettingsImmediate(scheduleSettings.copy(liveScalingType = it)) }
+                    )
+                    // Each static screen keeps its own scaling (plan 5.4); with both on, each gets a row.
+                    bothEnabled -> {
+                        ScreenLabel(stringResource(R.string.home))
+                        ScalingChoices(
+                            options = scalingOptions,
+                            selected = scheduleSettings.homeScalingType,
+                            enabled = true,
+                            onSelect = { updateSettingsImmediate(scheduleSettings.copy(homeScalingType = it)) }
+                        )
+                        ScreenLabel(stringResource(R.string.lock))
+                        ScalingChoices(
+                            options = scalingOptions,
+                            selected = scheduleSettings.lockScalingType,
+                            enabled = true,
+                            onSelect = { updateSettingsImmediate(scheduleSettings.copy(lockScalingType = it)) }
+                        )
                     }
+                    lockEnabled -> ScalingChoices(
+                        options = scalingOptions,
+                        selected = scheduleSettings.lockScalingType,
+                        enabled = true,
+                        onSelect = { updateSettingsImmediate(scheduleSettings.copy(lockScalingType = it)) }
+                    )
+                    else -> ScalingChoices(
+                        options = scalingOptions,
+                        selected = scheduleSettings.homeScalingType,
+                        enabled = effectsEnabled,
+                        onSelect = { updateSettingsImmediate(scheduleSettings.copy(homeScalingType = it)) }
+                    )
                 }
                 // Launchers scroll only the home screen, and only Fill keeps the image's overflow.
                 if (showsHorizontalScrolling(wallpaperMode, scheduleSettings)) {
@@ -661,6 +683,39 @@ fun WallpaperScreen(
  */
 internal fun showsHorizontalScrolling(mode: WallpaperMode, settings: ScheduleSettings): Boolean =
     mode == WallpaperMode.STATIC && settings.homeEnabled && settings.homeScalingType == ScalingType.FILL
+
+/** Fill / Fit / Stretch / None for one screen. */
+@Composable
+private fun ScalingChoices(
+    options: List<Pair<ScalingType, String>>,
+    selected: ScalingType,
+    enabled: Boolean,
+    onSelect: (ScalingType) -> Unit
+) {
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (scalingType, label) ->
+            SegmentedButton(
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+                onClick = { onSelect(scalingType) },
+                selected = scalingType == selected,
+                enabled = enabled
+            ) {
+                Text(text = label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** Names the screen the scaling row below it belongs to. */
+@Composable
+private fun ScreenLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.semantics { heading() }
+    )
+}
 
 /** A switch row inside a card that already has its own padding; the whole row toggles. */
 @Composable

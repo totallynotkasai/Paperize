@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -55,6 +56,7 @@ import coil3.request.ImageRequest
 import coil3.size.Size
 import com.anthonyla.paperize.domain.model.Wallpaper
 import com.anthonyla.paperize.R
+import com.anthonyla.paperize.presentation.screens.album_view.components.EXCLUDED_ALPHA
 import com.anthonyla.paperize.presentation.screens.sort.components.SortViewTopBar
 import com.anthonyla.paperize.presentation.theme.AppIconSizes
 import com.anthonyla.paperize.presentation.theme.AppShapes
@@ -310,12 +312,22 @@ private fun WallpaperSortCard(wallpaper: Wallpaper, modifier: Modifier = Modifie
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(AppSpacing.large)
         ) {
-            Text(
-                text = wallpaper.displayFileName,
-                modifier = Modifier.weight(1f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = wallpaper.displayFileName,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                // Excluded images keep their place in the order but are skipped (plan 5.2).
+                if (wallpaper.excluded) {
+                    Text(
+                        text = stringResource(R.string.state_excluded),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
             Spacer(Modifier.width(AppSpacing.small))
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
@@ -324,6 +336,7 @@ private fun WallpaperSortCard(wallpaper: Wallpaper, modifier: Modifier = Modifie
                     .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                alpha = if (wallpaper.excluded) EXCLUDED_ALPHA else 1f,
                 modifier = Modifier.size(AppIconSizes.large)
                     .border(BorderStroke(1.dp, MaterialTheme.colorScheme.onSecondaryContainer), CircleShape)
                     .clip(CircleShape)

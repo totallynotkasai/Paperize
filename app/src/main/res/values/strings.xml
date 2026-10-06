@@ -17,7 +17,6 @@
   <string name="album_name">Album Name</string>
   <string name="cancel">Cancel</string>
   <string name="save">Save</string>
-  <string name="delete_album">Delete</string>
   <string name="no_album_selected">No album selected</string>
   <string name="currently_selected_album">Currently selected album</string>
   <string name="agree">Agree</string>
@@ -243,7 +242,6 @@
     <item quantity="other">%d files were skipped because Paperize can\'t show their format.</item>
   </plurals>
   <string name="unavailable">Can\'t be opened</string>
-  <string name="content_desc_unavailable">%1$s, can\'t be opened</string>
   <string name="error_no_available_wallpapers">None of this album\'s images can be opened right now. Open the album in Paperize to restore access.</string>
   <string name="access_lost_title">Some images can\'t be opened</string>
   <plurals name="access_lost_message">
@@ -331,4 +329,64 @@
     <item quantity="one">%d minute per sweep</item>
     <item quantity="other">%d minutes per sweep</item>
   </plurals>
+
+  <!-- Library features (fork plan 5.1–5.5) -->
+  <string name="album_menu">Album options</string>
+  <string name="album_settings">Album settings</string>
+  <string name="delete_album_menu">Delete album</string>
+  <string name="rename_album">Rename album</string>
+  <string name="album_name_setting">Name</string>
+  <string name="album_rename_failed">Could not rename the album. Please try again.</string>
+  <string name="album_settings_failed">Could not save the album settings. Please try again.</string>
+  <string name="favorites_title">Favourites</string>
+  <plurals name="favorites_count">
+    <item quantity="one">%d favourite in this album</item>
+    <item quantity="other">%d favourites in this album</item>
+  </plurals>
+  <string name="favorites_mode_marker">Marker only</string>
+  <string name="favorites_mode_marker_description">Favourites rotate like any other image. Filter the album to find them.</string>
+  <string name="favorites_mode_more_often">Show more often</string>
+  <string name="favorites_mode_more_often_description">While Shuffle is on, each favourite comes up twice as often.</string>
+  <string name="favorites_mode_only">Favourites only</string>
+  <string name="favorites_mode_only_description">Only favourites rotate. With none, every image does.</string>
+  <string name="favorites_more_often_needs_shuffle">Shuffle is off, so favourites come up once per round, in order.</string>
+  <string name="favorites_only_none_yet">No favourites yet, so every image rotates.</string>
+  <string name="custom_effects_title">Custom effects for this album</string>
+  <string name="custom_effects_description_static">Used instead of the Home and Lock effects wherever this album is shown.</string>
+  <string name="custom_effects_description_live">Used instead of the live wallpaper\'s visual effects while this album is shown.</string>
+  <string name="album_uses_own_effects">“%1$s” has custom effects, which it uses instead of these. Change them in the album\'s settings.</string>
+  <string name="filter_favorites">Favourites</string>
+  <string name="filter_excluded">Excluded</string>
+  <string name="filter_with_count">%1$s (%2$d)</string>
+  <string name="filter_no_favorites">No favourites here yet. Long-press images to select them, then tap the heart.</string>
+  <string name="filter_no_excluded">Nothing here is excluded from rotation.</string>
+  <string name="action_favorite">Favourite</string>
+  <string name="action_exclude">Exclude from rotation</string>
+  <string name="state_favorite">favourite</string>
+  <string name="state_excluded">excluded from rotation</string>
+  <string name="state_unavailable">can\'t be opened</string>
+  <string name="list_separator">", "</string>
+  <plurals name="marked_favorite">
+    <item quantity="one">%d image added to favourites</item>
+    <item quantity="other">%d images added to favourites</item>
+  </plurals>
+  <plurals name="unmarked_favorite">
+    <item quantity="one">%d image removed from favourites</item>
+    <item quantity="other">%d images removed from favourites</item>
+  </plurals>
+  <plurals name="marked_excluded">
+    <item quantity="one">%d image excluded from rotation</item>
+    <item quantity="other">%d images excluded from rotation</item>
+  </plurals>
+  <plurals name="unmarked_excluded">
+    <item quantity="one">%d image is back in rotation</item>
+    <item quantity="other">%d images are back in rotation</item>
+  </plurals>
+  <string name="mark_failed">Couldn\'t update the selected images. Please try again.</string>
+  <plurals name="excluded_count">
+    <item quantity="one">%d excluded</item>
+    <item quantity="other">%d excluded</item>
+  </plurals>
+  <string name="count_with_excluded">%1$s · %2$s</string>
+  <string name="error_all_wallpapers_excluded">Every image in this album is excluded from rotation. Include some again in Paperize to keep changing.</string>
 </resources>

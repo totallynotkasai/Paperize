@@ -22,6 +22,7 @@ import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.model.Wallpaper
 import com.anthonyla.paperize.domain.model.usesVisibleLiveTimer
+import com.anthonyla.paperize.domain.repository.AlbumRepository
 import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.domain.repository.WallpaperRepository
 import com.anthonyla.paperize.service.livewallpaper.gl.GLCompatibility
@@ -39,12 +40,16 @@ import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,6 +66,7 @@ import kotlinx.coroutines.withContext
 class PaperizeLiveWallpaperService : GLWallpaperService() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var albumRepository: AlbumRepository
     @Inject lateinit var wallpaperRepository: WallpaperRepository
     @Inject lateinit var wallpaperScheduler: WallpaperScheduler
 
@@ -291,6 +297,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
             electLeader()
         }
 
+        @OptIn(ExperimentalCoroutinesApi::class)
         private fun observeSettings() {
             engineScope.launch {
                 combine(
@@ -298,9 +305,13 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                     settingsRepository.getWallpaperModeFlow()
                 ) { settings, mode ->
                     Pair(settings, mode)
+                }.flatMapLatest { (settings, mode) ->
+                    // The live album's own effects replace the live effects (plan 5.3).
+                    val albumEffects = settings.liveAlbumId?.let { albumRepository.getAlbumEffectsFlow(it) } ?: flowOf(null)
+                    albumEffects.map { Triple(settings, mode, it) }
                 }.catch { e ->
                     Log.e(TAG, "Error observing settings", e)
-                }.collect { (settings, mode) ->
+                }.collect { (settings, mode, albumEffects) ->
                     val timerConfigurationChanged =
                         latestWallpaperMode != mode ||
                             latestSettings.enableChanger != settings.enableChanger ||
@@ -315,7 +326,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                     }
 
                     val albumId = settings.liveAlbumId
-                    val effects = settings.liveEffects
+                    val effects = settings.liveEffects.withAlbumEffects(albumEffects)
                     val scalingType = settings.liveScalingType
 
                     // The first value only records the album the engine started with; its initial

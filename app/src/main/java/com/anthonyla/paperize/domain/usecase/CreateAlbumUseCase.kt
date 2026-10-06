@@ -10,7 +10,8 @@ class CreateAlbumUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(name: String, coverUri: String? = null): Result<Album> = Result.runCatching {
         require(name.isNotBlank()) { "Album name cannot be empty" }
-        require(albumRepository.getAlbumByName(name) == null) { "Album with this name already exists" }
+        // Same rule as renaming: names are unique regardless of case.
+        require(!albumRepository.isAlbumNameTaken(name)) { "Album with this name already exists" }
         albumRepository.createAlbum(name, coverUri).getOrThrow()
     }
 }

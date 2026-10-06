@@ -17,7 +17,6 @@
   <string name="album_name">相册名称</string>
   <string name="cancel">取消</string>
   <string name="save">保存</string>
-  <string name="delete_album">删除</string>
   <string name="no_album_selected">未选择相册</string>
   <string name="currently_selected_album">当前选中的相册</string>
   <string name="agree">同意</string>
@@ -239,7 +238,6 @@
     <item quantity="other">已跳过 %d 个文件，Paperize 无法显示其格式。</item>
   </plurals>
   <string name="unavailable">无法打开</string>
-  <string name="content_desc_unavailable">%1$s，无法打开</string>
   <string name="error_no_available_wallpapers">此相册中的图片目前都无法打开。请在 Paperize 中打开该相册以恢复访问权限。</string>
   <string name="access_lost_title">部分图片无法打开</string>
   <plurals name="access_lost_message">
@@ -321,4 +319,58 @@
   <plurals name="auto_pan_sweep_minutes">
     <item quantity="other">单程 %d 分钟</item>
   </plurals>
+
+  <!-- 图库功能（分支计划 5.1–5.5） -->
+  <string name="album_menu">相册选项</string>
+  <string name="album_settings">相册设置</string>
+  <string name="delete_album_menu">删除相册</string>
+  <string name="rename_album">重命名相册</string>
+  <string name="album_name_setting">名称</string>
+  <string name="album_rename_failed">无法重命名相册，请重试。</string>
+  <string name="album_settings_failed">无法保存相册设置，请重试。</string>
+  <string name="favorites_title">收藏</string>
+  <plurals name="favorites_count">
+    <item quantity="other">此相册中有 %d 张收藏</item>
+  </plurals>
+  <string name="favorites_mode_marker">仅作标记</string>
+  <string name="favorites_mode_marker_description">收藏的图片与其他图片一样轮换。可在相册中筛选查看。</string>
+  <string name="favorites_mode_more_often">更常出现</string>
+  <string name="favorites_mode_more_often_description">开启随机时，每张收藏出现的频率是其他图片的两倍。</string>
+  <string name="favorites_mode_only">仅限收藏</string>
+  <string name="favorites_mode_only_description">只轮换收藏的图片。没有收藏时，所有图片都会轮换。</string>
+  <string name="favorites_more_often_needs_shuffle">随机已关闭，因此收藏的图片每轮按顺序出现一次。</string>
+  <string name="favorites_only_none_yet">还没有收藏，因此所有图片都会轮换。</string>
+  <string name="custom_effects_title">此相册使用自定义效果</string>
+  <string name="custom_effects_description_static">无论此相册显示在哪里，都会代替主页和锁屏的效果。</string>
+  <string name="custom_effects_description_live">显示此相册时，会代替动态壁纸的视觉效果。</string>
+  <string name="album_uses_own_effects">「%1$s」使用自定义效果，而不是这里的效果。可在该相册的设置中更改。</string>
+  <string name="filter_favorites">收藏</string>
+  <string name="filter_excluded">已排除</string>
+  <string name="filter_with_count">%1$s（%2$d）</string>
+  <string name="filter_no_favorites">这里还没有收藏。长按图片将其选中，然后轻点爱心。</string>
+  <string name="filter_no_excluded">这里没有被排除在轮换之外的图片。</string>
+  <string name="action_favorite">收藏</string>
+  <string name="action_exclude">排除在轮换之外</string>
+  <string name="state_favorite">已收藏</string>
+  <string name="state_excluded">已排除在轮换之外</string>
+  <string name="state_unavailable">无法打开</string>
+  <string name="list_separator">，</string>
+  <plurals name="marked_favorite">
+    <item quantity="other">已将 %d 张图片加入收藏</item>
+  </plurals>
+  <plurals name="unmarked_favorite">
+    <item quantity="other">已将 %d 张图片移出收藏</item>
+  </plurals>
+  <plurals name="marked_excluded">
+    <item quantity="other">已将 %d 张图片排除在轮换之外</item>
+  </plurals>
+  <plurals name="unmarked_excluded">
+    <item quantity="other">%d 张图片已恢复轮换</item>
+  </plurals>
+  <string name="mark_failed">无法更新所选图片，请重试。</string>
+  <plurals name="excluded_count">
+    <item quantity="other">%d 张已排除</item>
+  </plurals>
+  <string name="count_with_excluded">%1$s · %2$s</string>
+  <string name="error_all_wallpapers_excluded">此相册中的所有图片都已排除在轮换之外。请在 Paperize 中恢复部分图片以继续更换。</string>
 </resources>

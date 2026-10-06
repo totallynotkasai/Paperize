@@ -3,11 +3,15 @@ import com.anthonyla.paperize.core.constants.Constants
 
 import android.util.Log
 import com.anthonyla.paperize.R
+import com.anthonyla.paperize.core.FavoritesMode
 import com.anthonyla.paperize.core.Result
+import com.anthonyla.paperize.core.ScreenType
+import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.domain.usecase.GrantLimitException
 import com.anthonyla.paperize.domain.usecase.ImportResult
 import com.anthonyla.paperize.domain.usecase.ImportWallpapersUseCase
 import com.anthonyla.paperize.domain.usecase.DeleteAlbumUseCase
+import com.anthonyla.paperize.domain.usecase.MarkWallpapersUseCase
 import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -15,14 +19,20 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.anthonyla.paperize.domain.model.Album
 import com.anthonyla.paperize.domain.model.Folder
+import com.anthonyla.paperize.domain.model.WallpaperEffects
 import com.anthonyla.paperize.domain.repository.AlbumRepository
+import com.anthonyla.paperize.domain.repository.SettingsRepository
 import com.anthonyla.paperize.presentation.common.navigation.AlbumRoute
 import com.anthonyla.paperize.presentation.common.util.UiText
+import com.anthonyla.paperize.service.wallpaper.WallpaperChangeRequests
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
@@ -41,20 +51,43 @@ sealed interface GrantNotice {
     data class NearLimit(val inUse: Int) : GrantNotice
 }
 
+/** How renaming an album ended. */
+enum class RenameOutcome { RENAMED, NAME_TAKEN, FAILED }
+
 @HiltViewModel
 class AlbumViewViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     private val albumRepository: AlbumRepository,
     private val importWallpapersUseCase: ImportWallpapersUseCase,
     private val deleteAlbumUseCase: DeleteAlbumUseCase,
-    private val imports: AlbumImports
+    private val imports: AlbumImports,
+    private val markWallpapers: MarkWallpapersUseCase,
+    private val settingsRepository: SettingsRepository,
+    private val changeRequests: WallpaperChangeRequests
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "AlbumViewViewModel"
+        private const val KEY_FILTER = "imageFilter"
     }
 
     private val albumId = savedStateHandle.toRoute<AlbumRoute>().albumId
+
+    val filter: StateFlow<ImageFilter> = savedStateHandle.getStateFlow(KEY_FILTER, ImageFilter.ALL)
+
+    /** Shows only favourites or excluded images (from folders too); clears the selection. */
+    fun setFilter(filter: ImageFilter) {
+        if (filter == this.filter.value) return
+        clearSelection()
+        savedStateHandle[KEY_FILTER] = filter
+    }
+
+    val wallpaperMode: StateFlow<WallpaperMode?> = settingsRepository.getWallpaperModeFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), null)
+
+    val shuffleEnabled: StateFlow<Boolean> = settingsRepository.getScheduleSettingsFlow()
+        .map { it.shuffleEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), false)
 
     val album: StateFlow<Album?> = albumRepository.getAlbumById(albumId)
         .stateIn(
@@ -80,6 +113,11 @@ class AlbumViewViewModel @Inject constructor(
 
     private val _selectedFolders = MutableStateFlow<Set<String>>(emptySet())
     val selectedFolders: StateFlow<Set<String>> = _selectedFolders.asStateFlow()
+
+    /** Whether everything selected (images in selected folders too) is a favourite, or excluded. */
+    val selectionMarks: StateFlow<SelectionMarks> = combine(album, _selectedWallpapers, _selectedFolders) { album, images, folders ->
+        album?.imagesIn(images, folders)?.selectionMarks() ?: SelectionMarks()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(Constants.FLOW_SUBSCRIPTION_TIMEOUT_MS), SelectionMarks())
 
     /** Imports run in [AlbumImports], so they carry on if this screen is left. */
     val importProgress: StateFlow<ImportProgress> = imports.state(albumId)
@@ -227,10 +265,11 @@ class AlbumViewViewModel @Inject constructor(
         }
     }
 
-    fun selectAll() {
+    /** Select what the grid shows, which depends on the filter. */
+    fun selectAll(wallpaperIds: Collection<String>, folderIds: Collection<String>) {
         if (_isDeleting.value) return
-        _selectedWallpapers.value = album.value?.wallpapers.orEmpty().map { it.id }.toSet()
-        _selectedFolders.value = album.value?.folders.orEmpty().map { it.id }.toSet()
+        _selectedWallpapers.value = wallpaperIds.toSet()
+        _selectedFolders.value = folderIds.toSet()
     }
 
     fun clearSelection() {
@@ -249,6 +288,128 @@ class AlbumViewViewModel @Inject constructor(
             folderIds = accessIssues.value.unavailableFolders.map { it.id }
         )
     }
+
+    /** Favourite (or unfavourite) every selected image, including the images of selected folders. */
+    fun setSelectionFavorite(favorite: Boolean) = markSelection(favorite = favorite) { ids ->
+        markWallpapers.setFavorite(albumId, ids, favorite)
+    }
+
+    /** Exclude (or include again) every selected image, including the images of selected folders. */
+    fun setSelectionExcluded(excluded: Boolean) = markSelection(excluded = excluded) { ids ->
+        markWallpapers.setExcluded(albumId, ids, excluded)
+    }
+
+    private fun markSelection(
+        favorite: Boolean? = null,
+        excluded: Boolean? = null,
+        mark: suspend (List<String>) -> Result<Int>
+    ) {
+        val album = album.value ?: return
+        if (_isDeleting.value) return
+        val ids = album.imagesIn(_selectedWallpapers.value, _selectedFolders.value).map { it.id }
+        if (ids.isEmpty()) return
+        _message.value = null
+        viewModelScope.launch {
+            _message.value = when (val result = mark(ids)) {
+                is Result.Success -> {
+                    clearSelection()
+                    markMessage(favorite, excluded, ids.size)
+                }
+                is Result.Error -> {
+                    Log.e(TAG, "Could not mark images", result.exception)
+                    UiText.Resource(R.string.mark_failed)
+                }
+            }
+        }
+    }
+
+    /** Returns how renaming went; the dialog stays open unless it worked. */
+    suspend fun renameAlbum(name: String): RenameOutcome = when (val result = albumRepository.renameAlbum(albumId, name)) {
+        is Result.Success -> if (result.data) RenameOutcome.RENAMED else RenameOutcome.NAME_TAKEN
+        is Result.Error -> {
+            Log.e(TAG, "Could not rename the album", result.exception)
+            RenameOutcome.FAILED
+        }
+    }
+
+    fun setFavoritesMode(mode: FavoritesMode) {
+        viewModelScope.launch {
+            (albumRepository.setFavoritesMode(albumId, mode) as? Result.Error)?.let {
+                Log.e(TAG, "Could not save the favourites setting", it.exception)
+                _message.value = UiText.Resource(R.string.album_settings_failed)
+            }
+        }
+    }
+
+    /**
+     * Effects to start "Custom effects" from: those of the screen showing this album, so turning it
+     * on changes nothing until an effect is changed.
+     */
+    suspend fun startingEffects(): WallpaperEffects {
+        val settings = settingsRepository.getScheduleSettings()
+        val effects = when {
+            settingsRepository.getWallpaperMode() == WallpaperMode.LIVE -> settings.liveEffects
+            settings.albumFor(ScreenType.HOME) != albumId && settings.albumFor(ScreenType.LOCK) == albumId -> settings.lockEffects
+            else -> settings.homeEffects
+        }
+        return effects.visualOnly()
+    }
+
+    /**
+     * Save the album's own effects (null: use each screen's own again) and re-render the screens
+     * showing this album. [deferRender] (slider levels) waits briefly for further edits, like the
+     * Wallpaper tab; the live wallpaper follows the saved effects by itself.
+     */
+    fun setCustomEffects(effects: WallpaperEffects?, deferRender: Boolean = false) {
+        viewModelScope.launch {
+            when (val result = albumRepository.setAlbumEffects(albumId, effects)) {
+                is Result.Success -> renderScreensShowingAlbum(deferRender)
+                is Result.Error -> {
+                    Log.e(TAG, "Could not save the album's effects", result.exception)
+                    _message.value = UiText.Resource(R.string.album_settings_failed)
+                }
+            }
+        }
+    }
+
+    private var pendingRender: ScreenType? = null
+    private var pendingRenderJob: Job? = null
+
+    private suspend fun renderScreensShowingAlbum(defer: Boolean) {
+        if (settingsRepository.getWallpaperMode() != WallpaperMode.STATIC) return
+        val settings = settingsRepository.getScheduleSettings()
+        val screens = settings.rotatingStaticScreens().filter { settings.albumFor(it) == albumId }
+        val screen = when (screens.size) {
+            0 -> return
+            1 -> screens.single()
+            else -> ScreenType.BOTH
+        }
+        pendingRenderJob?.cancel()
+        pendingRenderJob = null
+        if (!defer) {
+            pendingRender = null
+            changeRequests.reapplyEffects(screen)
+            return
+        }
+        pendingRender = screen
+        pendingRenderJob = viewModelScope.launch {
+            delay(Constants.SETTINGS_DEBOUNCE_MS)
+            pendingRenderJob = null
+            flushPendingRender()
+        }
+    }
+
+    /** Render waiting effect edits now; call when the settings sheet closes or the screen pauses. */
+    fun flushPendingRender() {
+        pendingRenderJob?.cancel()
+        pendingRenderJob = null
+        pendingRender?.let {
+            pendingRender = null
+            changeRequests.reapplyEffects(it)
+        }
+    }
+
+    override fun onCleared() = flushPendingRender()
 
     private fun removeItems(wallpaperIds: List<String>, folderIds: List<String>) {
         if (_isDeleting.value || isImporting) return

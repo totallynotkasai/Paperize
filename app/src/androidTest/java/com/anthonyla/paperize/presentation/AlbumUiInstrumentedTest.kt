@@ -38,6 +38,10 @@ import com.anthonyla.paperize.domain.model.AppSettings
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.model.WallpaperEffects
 import com.anthonyla.paperize.presentation.screens.wallpaper.WallpaperScreen
+import com.anthonyla.paperize.core.FavoritesMode
+import com.anthonyla.paperize.presentation.screens.album_view.ImageFilter
+import com.anthonyla.paperize.presentation.screens.album_view.components.AlbumSettingsSheet
+import com.anthonyla.paperize.presentation.screens.album_view.components.ImageFilterChips
 
 class AlbumUiInstrumentedTest {
     @get:Rule val compose = createComposeRule()
@@ -256,6 +260,108 @@ class AlbumUiInstrumentedTest {
         compose.onNodeWithText(context.getString(R.string.lock)).assertIsOff()
         // The state is announced once, by the switch, not again by the visible "Enabled" line.
         compose.onAllNodesWithText(context.getString(R.string.enabled)).assertCountEquals(0)
+    }
+
+    @Test fun eachTurnedOnScreenHasItsOwnScaling() {
+        val settings = mutableStateOf(ScheduleSettings(
+            homeEnabled = true, lockEnabled = true,
+            homeScalingType = ScalingType.FILL, lockScalingType = ScalingType.FIT
+        ))
+        var latest = settings.value
+        compose.setContent {
+            PaperizeTheme(false, false) {
+                WallpaperScreen(
+                    albums = emptyList(), persistedScheduleSettings = settings.value,
+                    appSettings = AppSettings(), wallpaperMode = WallpaperMode.STATIC,
+                    onToggleChanger = {}, onSelectHomeAlbum = {}, onSelectLockAlbum = {}, onSelectLiveAlbum = {},
+                    onUpdateScheduleSettings = { latest = it }, onUpdateSettingsDeferRender = {},
+                    onChangeWallpaperNow = {}, homeWallpaperUri = null, lockWallpaperUri = null
+                )
+            }
+        }
+        // Home's row comes first, then Lock's.
+        val fit = compose.onAllNodesWithText(context.getString(R.string.fit))
+        fit.assertCountEquals(2)
+        fit[0].performScrollTo().assertIsNotSelected()
+        fit[1].performScrollTo().assertIsSelected()
+        compose.onAllNodesWithText(context.getString(R.string.stretch))[0].performScrollTo().performClick()
+        compose.runOnIdle {
+            assertEquals(ScalingType.STRETCH, latest.homeScalingType)
+            assertEquals(ScalingType.FIT, latest.lockScalingType)
+        }
+
+        // With only Lock on, the single row is Lock's.
+        compose.runOnIdle { settings.value = settings.value.copy(homeEnabled = false) }
+        compose.onAllNodesWithText(context.getString(R.string.fit)).assertCountEquals(1)
+        compose.onNodeWithText(context.getString(R.string.none)).performScrollTo().performClick()
+        compose.runOnIdle {
+            assertEquals(ScalingType.NONE, latest.lockScalingType)
+            assertEquals(ScalingType.FILL, latest.homeScalingType)
+        }
+    }
+
+    @Test fun albumSettingsSaveEachChangeAtOnce() {
+        val album = emptyAlbum("album", "Cats")
+        var mode: FavoritesMode? = null
+        var renameAsked = false
+        var saved: Pair<WallpaperEffects?, Boolean>? = null
+        compose.setContent {
+            PaperizeTheme(false, false) {
+                AlbumSettingsSheet(
+                    album = album, liveMode = false, shuffleEnabled = true,
+                    onRename = { renameAsked = true },
+                    onFavoritesModeChange = { mode = it },
+                    startingEffects = { WallpaperEffects(enableBlur = true, blurPercentage = 30) },
+                    onEffectsChange = { effects, defer -> saved = effects to defer },
+                    onDismiss = {}
+                )
+            }
+        }
+        compose.onNodeWithText(context.getString(R.string.favorites_mode_marker)).assertIsSelected()
+        compose.onNodeWithText(context.getString(R.string.favorites_mode_only)).performClick()
+        compose.runOnIdle { assertEquals(FavoritesMode.FAVORITES_ONLY, mode) }
+
+        compose.onNodeWithText("Cats").performClick()
+        compose.runOnIdle { assertTrue(renameAsked) }
+
+        // Custom effects start from the screen's effects, so turning them on changes nothing yet.
+        val custom = compose.onNodeWithText(context.getString(R.string.custom_effects_title))
+        custom.performScrollTo().assertIsOff().performClick()
+        compose.runOnIdle { assertEquals(WallpaperEffects(enableBlur = true, blurPercentage = 30) to false, saved) }
+        custom.assertIsOn()
+        compose.onNodeWithText(context.getString(R.string.change_blur)).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun markedImagesSayWhatTheirMarksAre() {
+        compose.setContent {
+            PaperizeTheme(false, false) {
+                WallpaperItem(
+                    wallpaperUri = "", wallpaperName = "Sea.jpg", isSelected = false, isSelectionMode = false,
+                    onClick = {}, onLongClick = null, favorite = true, excluded = true,
+                    modifier = Modifier.size(120.dp)
+                )
+            }
+        }
+        val label = listOf("Sea.jpg", context.getString(R.string.state_favorite), context.getString(R.string.state_excluded))
+            .joinToString(context.getString(R.string.list_separator))
+        compose.onNodeWithContentDescription(label).assertExists()
+    }
+
+    @Test fun filterChipsShowOneFilterAtATime() {
+        val filter = mutableStateOf(ImageFilter.ALL)
+        compose.setContent {
+            PaperizeTheme(false, false) {
+                ImageFilterChips(filter = filter.value, favoriteCount = 2, excludedCount = 1, onFilterChange = { filter.value = it })
+            }
+        }
+        fun chip(label: Int, count: Int) =
+            compose.onNodeWithText(context.getString(R.string.filter_with_count, context.getString(label), count))
+        chip(R.string.filter_favorites, 2).performClick()
+        compose.runOnIdle { assertEquals(ImageFilter.FAVORITES, filter.value) }
+        chip(R.string.filter_excluded, 1).performClick()
+        compose.runOnIdle { assertEquals(ImageFilter.EXCLUDED, filter.value) }
+        chip(R.string.filter_excluded, 1).assertIsSelected().performClick()
+        compose.runOnIdle { assertEquals(ImageFilter.ALL, filter.value) }
     }
 
 }

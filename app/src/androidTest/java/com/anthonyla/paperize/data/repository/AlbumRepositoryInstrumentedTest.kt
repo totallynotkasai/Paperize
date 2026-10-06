@@ -6,8 +6,10 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.anthonyla.paperize.core.FavoritesMode
 import com.anthonyla.paperize.core.Result
 import com.anthonyla.paperize.core.ScreenType
+import com.anthonyla.paperize.domain.model.WallpaperEffects
 import com.anthonyla.paperize.data.database.PaperizeDatabase
 import com.anthonyla.paperize.data.database.entities.AlbumEntity
 import com.anthonyla.paperize.data.mapper.toEntity
@@ -301,6 +303,159 @@ class AlbumRepositoryInstrumentedTest {
         documents.grants += setOf("content://tree", "content://other")
         assertEquals(2, tracked.syncAccess("album").getOrThrow())
         assertEquals("other", wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)?.id)
+    }
+
+    private fun queue(screen: ScreenType = ScreenType.HOME, album: String = "album") = runBlocking {
+        db.wallpaperQueueDao().getQueueItems(album, screen).map { it.wallpaperId }
+    }
+
+    @Test fun excludedImagesNeverRotateAndJoinAgainWhenIncluded() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        albums.addWallpapersToAlbum("album", listOf(image("a"), image("b"), image("c"))).getOrThrow()
+        assertEquals(listOf("b"), albums.setExcluded("album", listOf("b", "b"), true).getOrThrow())
+        // Already excluded: nothing changes.
+        assertEquals(emptyList<String>(), albums.setExcluded("album", listOf("b"), true).getOrThrow())
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
+        assertEquals(listOf("a", "c"), queue())
+        assertEquals(2, wallpapers.countIncludedWallpapers("album"))
+
+        albums.setExcluded("album", listOf("b"), false).getOrThrow()
+        wallpapers.addToQueues("album", listOf("b"), shuffle = false).getOrThrow()
+        assertEquals(listOf("a", "b", "c"), queue())
+
+        albums.setExcluded("album", listOf("a", "b", "c"), true).getOrThrow()
+        assertEquals(0, wallpapers.countIncludedWallpapers("album"))
+        assertNull(wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME))
+    }
+
+    @Test fun favouritesOnlyRotatesFavouritesAndFallsBackWithoutAny() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        albums.addWallpapersToAlbum("album", listOf(image("a"), image("b"), image("c"))).getOrThrow()
+        assertTrue(albums.setFavoritesMode("album", FavoritesMode.FAVORITES_ONLY).getOrThrow())
+        assertFalse(albums.setFavoritesMode("album", FavoritesMode.FAVORITES_ONLY).getOrThrow())
+
+        // No favourites yet: every image rotates.
+        assertFalse(wallpapers.rotatesFavoritesOnly("album"))
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
+        assertEquals(listOf("a", "b", "c"), queue())
+
+        albums.setFavorite("album", listOf("c"), true).getOrThrow()
+        assertTrue(wallpapers.rotatesFavoritesOnly("album"))
+        // "a" and "b" keep their place but are passed over.
+        assertEquals("c", wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)?.id)
+        assertNull(wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME))
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
+        assertEquals(listOf("c"), queue())
+
+        // An excluded favourite can't rotate, so the album falls back to every other image.
+        albums.setExcluded("album", listOf("c"), true).getOrThrow()
+        assertFalse(wallpapers.rotatesFavoritesOnly("album"))
+        wallpapers.clearQueues("album").getOrThrow()
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, false).getOrThrow()
+        assertEquals(listOf("a", "b"), queue())
+    }
+
+    @Test fun showMoreOftenQueuesFavouritesTwiceAndTakesOneTurnAtATime() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        albums.addWallpapersToAlbum("album", (1..6).map { image("i$it") }).getOrThrow()
+        albums.setFavorite("album", listOf("i2"), true).getOrThrow()
+        albums.setFavoritesMode("album", FavoritesMode.SHOW_MORE_OFTEN).getOrThrow()
+
+        // In order, favourites aren't weighted.
+        wallpapers.ensureWallpaperQueue("album", ScreenType.LOCK, false).getOrThrow()
+        assertEquals(6, queue(ScreenType.LOCK).size)
+
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, true).getOrThrow()
+        assertEquals(7, queue().size)
+        assertEquals(2, queue().count { it == "i2" })
+
+        // Taking one turn leaves the other; putting a turn back doesn't drop the other one.
+        val shown = mutableListOf<String>()
+        while (true) {
+            val next = wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)?.id ?: break
+            shown += next
+            if (next == "i2" && shown.count { it == "i2" } == 1) {
+                wallpapers.restoreWallpaperToQueueFront("album", ScreenType.HOME, "i2")
+                assertEquals(2, queue().count { it == "i2" })
+                assertEquals("i2", wallpapers.getAndDequeueWallpaper("album", ScreenType.HOME)?.id)
+            }
+        }
+        assertEquals(2, shown.count { it == "i2" })
+        assertEquals(7, shown.size)
+    }
+
+    @Test fun favouritesGainAndLoseTheirExtraTurnMidRound() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        albums.addWallpapersToAlbum("album", listOf(image("a"), image("b"), image("c"))).getOrThrow()
+        albums.setFavoritesMode("album", FavoritesMode.SHOW_MORE_OFTEN).getOrThrow()
+        wallpapers.ensureWallpaperQueue("album", ScreenType.HOME, true).getOrThrow()
+        assertEquals(3, queue().size)
+
+        albums.setFavorite("album", listOf("b"), true).getOrThrow()
+        wallpapers.favoritesChanged("album", listOf("b"), favorite = true, shuffle = true).getOrThrow()
+        assertEquals(2, queue().count { it == "b" })
+        // Removing the shown turn of an image takes only one of them.
+        wallpapers.removeWallpaperFromQueue("album", ScreenType.HOME, "b")
+        assertEquals(1, queue().count { it == "b" })
+        wallpapers.favoritesChanged("album", listOf("b"), favorite = true, shuffle = true).getOrThrow()
+
+        albums.setFavorite("album", listOf("b"), false).getOrThrow()
+        wallpapers.favoritesChanged("album", listOf("b"), favorite = false, shuffle = true).getOrThrow()
+        assertEquals(1, queue().count { it == "b" })
+
+        // A new mode starts a new round on every screen.
+        albums.setFavoritesMode("album", FavoritesMode.MARKER_ONLY).getOrThrow()
+        assertTrue(queue().isEmpty())
+    }
+
+    @Test fun marksSurviveFolderRefreshes() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        val folder = emptyFolder("folder", "album").copy(uri = "content://tree", wallpapers = listOf(image("f1"), image("f2"), image("f3")))
+        albums.addFolderToAlbum("album", folder).getOrThrow()
+        albums.setFavorite("album", listOf("f1"), true).getOrThrow()
+        albums.setExcluded("album", listOf("f2"), true).getOrThrow()
+
+        // A refresh finds the same files (under new ids, as a scan creates them) plus a new one,
+        // and no longer finds f3.
+        val rescanned = listOf("f1", "f2", "f4").map { image("scan-$it", folderId = "folder").copy(uri = "content://$it") }
+        assertEquals(1, albums.removeFolderImagesNotIn("folder", rescanned.map { it.uri }.toSet()).getOrThrow())
+        assertEquals(1, albums.addWallpapersToAlbum("album", rescanned).getOrThrow())
+
+        assertTrue(db.wallpaperDao().getWallpaperById("f1")!!.favorite)
+        assertTrue(db.wallpaperDao().getWallpaperById("f2")!!.excluded)
+        val added = db.wallpaperDao().getWallpaperById("scan-f4")!!
+        assertFalse(added.favorite || added.excluded)
+    }
+
+    @Test fun renamingKeepsNamesUniqueIgnoringCase() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("cats", "Cats", null, modifiedAt = 1L))
+        db.albumDao().insertAlbum(AlbumEntity("dogs", "Dogs", null, modifiedAt = 2L))
+        assertTrue(albums.isAlbumNameTaken(" cats "))
+        assertFalse(albums.isAlbumNameTaken("cats", exceptAlbumId = "cats"))
+
+        assertFalse(albums.renameAlbum("dogs", "  CATS ").getOrThrow())
+        assertEquals("Dogs", db.albumDao().getAlbumById("dogs")?.name)
+        assertTrue(albums.renameAlbum("dogs", " Birds ").getOrThrow())
+        assertEquals("Birds", db.albumDao().getAlbumById("dogs")?.name)
+        // An album may change the case of its own name.
+        assertTrue(albums.renameAlbum("cats", "CATS").getOrThrow())
+        // Renaming isn't a content change, so the Library order stays put.
+        assertEquals(2L, db.albumDao().getAlbumById("dogs")?.modifiedAt)
+        assertTrue(albums.renameAlbum("dogs", "  ") is Result.Error)
+    }
+
+    @Test fun albumEffectsAreStoredAndFlaggedInTheLibrary() = runBlocking {
+        db.albumDao().insertAlbum(AlbumEntity("album", "Album", null))
+        assertNull(albums.getAlbumEffects("album"))
+        val effects = WallpaperEffects(enableDarken = true, darkenPercentage = 140)
+        albums.setAlbumEffects("album", effects).getOrThrow()
+        assertEquals(effects.validate(), albums.getAlbumEffects("album"))
+        assertEquals(effects.validate(), albums.getAlbumEffectsFlow("album").first())
+        assertTrue(albums.getAlbumSummaries().first().single().hasCustomEffects)
+
+        albums.setAlbumEffects("album", null).getOrThrow()
+        assertNull(albums.getAlbumEffects("album"))
+        assertFalse(albums.getAlbumSummaries().first().single().hasCustomEffects)
     }
 
     @Test fun anEmptyGrantListIsNotTrustedWhileTheLibraryHasEntries() = runBlocking {

@@ -10,6 +10,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,8 +39,11 @@ import androidx.compose.ui.res.stringResource
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.core.net.toUri
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.anthonyla.paperize.R
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.anthonyla.paperize.core.WallpaperMode
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.domain.model.Folder
 import com.anthonyla.paperize.domain.model.Wallpaper
@@ -48,11 +52,15 @@ import com.anthonyla.paperize.presentation.common.components.EmptyCollection
 import com.anthonyla.paperize.presentation.common.util.UiText
 import com.anthonyla.paperize.presentation.common.util.asString
 import com.anthonyla.paperize.presentation.screens.album_view.components.AccessBanner
+import com.anthonyla.paperize.presentation.screens.album_view.components.AlbumSettingsSheet
 import com.anthonyla.paperize.presentation.screens.album_view.components.AlbumViewTopBar
+import com.anthonyla.paperize.presentation.screens.album_view.components.EmptyFilterMessage
 import com.anthonyla.paperize.presentation.screens.album_view.components.FolderItem
 import com.anthonyla.paperize.presentation.screens.album_view.components.GrantNoticeDialog
+import com.anthonyla.paperize.presentation.screens.album_view.components.ImageFilterChips
 import com.anthonyla.paperize.presentation.screens.album_view.components.ImportProgressCard
 import com.anthonyla.paperize.presentation.screens.album_view.components.ImportProgressDialog
+import com.anthonyla.paperize.presentation.screens.album_view.components.RenameAlbumDialog
 import com.anthonyla.paperize.presentation.screens.album_view.components.SortBottomSheet
 import com.anthonyla.paperize.presentation.screens.album_view.components.SortOption
 import com.anthonyla.paperize.presentation.screens.album_view.components.WallpaperItem
@@ -83,7 +91,15 @@ fun AlbumViewScreen(
     val accessIssues by viewModel.accessIssues.collectAsStateWithLifecycle()
     val isDeleting by viewModel.isDeleting.collectAsStateWithLifecycle()
     val albumDeleted by viewModel.albumDeleted.collectAsStateWithLifecycle()
+    val filter by viewModel.filter.collectAsStateWithLifecycle()
+    val selectionMarks by viewModel.selectionMarks.collectAsStateWithLifecycle()
+    val wallpaperMode by viewModel.wallpaperMode.collectAsStateWithLifecycle()
+    val shuffleEnabled by viewModel.shuffleEnabled.collectAsStateWithLifecycle()
     var showDeleteAlbumDialog by rememberSaveable { mutableStateOf(false) }
+    var showSettingsSheet by rememberSaveable { mutableStateOf(false) }
+    var showRenameDialog by rememberSaveable { mutableStateOf(false) }
+    // Effect edits wait briefly before re-rendering; leaving the app renders them straight away.
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { viewModel.flushPendingRender() }
     var showRemoveUnavailableDialog by rememberSaveable { mutableStateOf(false) }
     // Hiding the import dialog leaves a progress card in the grid; the next import shows it again.
     var importDialogHidden by rememberSaveable { mutableStateOf(false) }
@@ -105,11 +121,29 @@ fun AlbumViewScreen(
     val selectedCount = selectedWallpapers.size + selectedFolders.size
 
     val totalItemsCount = wallpapers.size + folders.size
-    val allSelected = selectedCount == totalItemsCount && totalItemsCount > 0
 
     var showSortSheet by rememberSaveable { mutableStateOf(false) }
     var showDeleteSelectedDialog by rememberSaveable { mutableStateOf(false) }
     var sortOption by rememberSaveable { mutableStateOf(SortOption.ROTATION) }
+
+    // A filter lists matching images from the whole album, folders included, in place of the tiles.
+    val allImages = remember(album) { album?.allImages().orEmpty() }
+    val favoriteCount = allImages.count { it.favorite }
+    val excludedCount = allImages.count { it.excluded }
+    val filteredImages = remember(album, filter, sortOption) {
+        val current = album ?: return@remember emptyList()
+        if (filter == ImageFilter.ALL) return@remember emptyList()
+        val comparator = if (sortOption == SortOption.ROTATION) current.rotationComparator() else sortOption.wallpaperComparator
+        allImages.filter(filter::matches).sortedWith(comparator)
+    }
+    val visibleWallpaperIds = if (filter == ImageFilter.ALL) wallpapers.map { it.id } else filteredImages.map { it.id }
+    val visibleFolderIds = if (filter == ImageFilter.ALL) folders.map { it.id } else emptyList()
+    val visibleCount = visibleWallpaperIds.size + visibleFolderIds.size
+    val allSelected = visibleCount > 0 && selectedWallpapers.containsAll(visibleWallpaperIds) &&
+        selectedFolders.containsAll(visibleFolderIds)
+    // Images inside folders come and go with their folder, so only directly added ones can be removed.
+    val directIds = remember(wallpapers) { wallpapers.mapTo(HashSet()) { it.id } }
+    val canDeleteSelection = selectedWallpapers.all { it in directIds }
 
     BackHandler(enabled = isSelectionMode) {
         viewModel.clearSelection()
@@ -183,10 +217,17 @@ fun AlbumViewScreen(
                 onBackClick = onBackClick,
                 onSortClick = { showSortSheet = true },
                 onReorderClick = onNavigateToReorder,
+                onAlbumSettings = { showSettingsSheet = true },
                 onDeleteAlbum = { showDeleteAlbumDialog = true },
-                onSelectAll = { if (allSelected) viewModel.clearSelection() else viewModel.selectAll() },
+                onSelectAll = {
+                    if (allSelected) viewModel.clearSelection() else viewModel.selectAll(visibleWallpaperIds, visibleFolderIds)
+                },
                 onDeleteSelected = { if (!isDeleting) showDeleteSelectedDialog = true },
-                onClearSelection = { viewModel.clearSelection() }
+                onClearSelection = { viewModel.clearSelection() },
+                selectionMarks = selectionMarks,
+                canDeleteSelection = canDeleteSelection,
+                onFavoriteChange = viewModel::setSelectionFavorite,
+                onExcludedChange = viewModel::setSelectionExcluded
             )
         },
         floatingActionButton = {
@@ -250,9 +291,9 @@ fun AlbumViewScreen(
                 )
             }
         }
-        val wallpaperItems: LazyGridScope.() -> Unit = {
+        val wallpaperItems: LazyGridScope.(List<Wallpaper>) -> Unit = { shown ->
             items(
-                items = sortedWallpapers,
+                items = shown,
                 key = { wallpaper -> "wallpaper-${wallpaper.id}" }
             ) { wallpaper: Wallpaper ->
                 WallpaperItem(
@@ -275,48 +316,91 @@ fun AlbumViewScreen(
                         viewModel.toggleWallpaperSelection(wallpaper.id)
                     },
                     unavailable = wallpaper.accessLost,
+                    favorite = wallpaper.favorite,
+                    excluded = wallpaper.excluded,
                     modifier = commonItemModifier.animateItem(placementSpec = itemPlacement)
                 )
             }
         }
-        LazyVerticalGrid(
-            state = lazyListState,
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            columns = GridCells.Adaptive(AppGrid.itemMinSize),
-            contentPadding = PaddingValues(AppSpacing.gridPadding),
-            horizontalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing),
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing)
-        ) {
-            if (importDialogHidden && importProgress !is ImportProgress.Idle) {
-                item(key = "import-progress", span = { GridItemSpan(maxLineSpan) }) {
-                    ImportProgressCard(
-                        progress = importProgress,
-                        onShow = { importDialogHidden = false },
-                        onCancel = viewModel::cancelImport
-                    )
+        // The filters stay above the grid, so they appear in view when the first mark is made.
+        Column(modifier = modifier.fillMaxSize().padding(paddingValues)) {
+            ImageFilterChips(
+                filter = filter,
+                favoriteCount = favoriteCount,
+                excludedCount = excludedCount,
+                onFilterChange = viewModel::setFilter,
+                modifier = Modifier.padding(top = AppSpacing.small)
+            )
+            LazyVerticalGrid(
+                state = lazyListState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                columns = GridCells.Adaptive(AppGrid.itemMinSize),
+                contentPadding = PaddingValues(AppSpacing.gridPadding),
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing),
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.gridSpacing)
+            ) {
+                if (importDialogHidden && importProgress !is ImportProgress.Idle) {
+                    item(key = "import-progress", span = { GridItemSpan(maxLineSpan) }) {
+                        ImportProgressCard(
+                            progress = importProgress,
+                            onShow = { importDialogHidden = false },
+                            onCancel = viewModel::cancelImport
+                        )
+                    }
                 }
-            }
-            if (accessIssues.unavailableImages > 0 && !isSelectionMode) {
-                item(key = "access-banner", span = { GridItemSpan(maxLineSpan) }) {
-                    AccessBanner(
-                        issues = accessIssues,
-                        onGrantAccess = grantAccess,
-                        onRemove = { showRemoveUnavailableDialog = true }
-                    )
+                if (accessIssues.unavailableImages > 0 && !isSelectionMode) {
+                    item(key = "access-banner", span = { GridItemSpan(maxLineSpan) }) {
+                        AccessBanner(
+                            issues = accessIssues,
+                            onGrantAccess = grantAccess,
+                            onRemove = { showRemoveUnavailableDialog = true }
+                        )
+                    }
                 }
-            }
-            // Rotation order lists images in the order they change in: direct images first,
-            // then each folder in turn.
-            if (sortOption == SortOption.ROTATION) {
-                wallpaperItems()
-                folderItems()
-            } else {
-                folderItems()
-                wallpaperItems()
+                when {
+                    filter != ImageFilter.ALL && filteredImages.isEmpty() ->
+                        item(key = "filter-empty", span = { GridItemSpan(maxLineSpan) }) { EmptyFilterMessage(filter) }
+                    filter != ImageFilter.ALL -> wallpaperItems(filteredImages)
+                    // Rotation order lists images in the order they change in: direct images first,
+                    // then each folder in turn.
+                    sortOption == SortOption.ROTATION -> {
+                        wallpaperItems(sortedWallpapers)
+                        folderItems()
+                    }
+                    else -> {
+                        folderItems()
+                        wallpaperItems(sortedWallpapers)
+                    }
+                }
             }
         }
+    }
+
+    val currentAlbum = album
+    if (showSettingsSheet && currentAlbum != null) {
+        AlbumSettingsSheet(
+            album = currentAlbum,
+            liveMode = wallpaperMode == WallpaperMode.LIVE,
+            shuffleEnabled = shuffleEnabled,
+            onRename = { showRenameDialog = true },
+            onFavoritesModeChange = viewModel::setFavoritesMode,
+            startingEffects = viewModel::startingEffects,
+            onEffectsChange = { effects, defer -> viewModel.setCustomEffects(effects, defer) },
+            onDismiss = {
+                showSettingsSheet = false
+                viewModel.flushPendingRender()
+            }
+        )
+    }
+
+    if (showRenameDialog && currentAlbum != null) {
+        RenameAlbumDialog(
+            currentName = currentAlbum.name,
+            onRename = viewModel::renameAlbum,
+            onDismiss = { showRenameDialog = false }
+        )
     }
 
     if (showSortSheet) {

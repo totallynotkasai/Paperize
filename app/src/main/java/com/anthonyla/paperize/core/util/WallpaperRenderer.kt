@@ -6,19 +6,25 @@ import androidx.core.net.toUri
 import com.anthonyla.paperize.core.ScreenType
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.domain.model.Wallpaper
+import com.anthonyla.paperize.domain.repository.AlbumRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import javax.inject.Inject
 
-class WallpaperRenderer @Inject constructor(@param:ApplicationContext private val context: Context) {
+class WallpaperRenderer @Inject constructor(
+    @param:ApplicationContext private val context: Context,
+    private val albumRepository: AlbumRepository
+) {
+    /** An album with its own effects uses them on every screen it is shown on (plan 5.3). */
     suspend fun render(wallpaper: Wallpaper, screen: ScreenType, settings: ScheduleSettings): Bitmap? {
         currentCoroutineContext().ensureActive()
-        val effects = when (screen) {
+        val screenEffects = when (screen) {
             ScreenType.HOME, ScreenType.BOTH -> settings.homeEffects
             ScreenType.LOCK -> settings.lockEffects
             ScreenType.LIVE -> settings.liveEffects
         }
+        val effects = screenEffects.withAlbumEffects(albumRepository.getAlbumEffects(wallpaper.albumId))
         val scaling = when (screen) {
             ScreenType.HOME, ScreenType.BOTH -> settings.homeScalingType
             ScreenType.LOCK -> settings.lockScalingType
