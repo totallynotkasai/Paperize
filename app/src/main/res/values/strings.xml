@@ -302,4 +302,33 @@
   <string name="content_desc_folder">Folder %1$s, %2$s</string>
   <string name="import_hide">Hide</string>
   <string name="import_continues_hint">You can leave this screen. Adding carries on while Paperize is open.</string>
+
+  <!-- Widgets (fork plan 4.1) -->
+  <string name="widget_shuffle_home">Shuffle Home</string>
+  <string name="widget_shuffle_lock">Shuffle Lock</string>
+  <string name="widget_shuffle_both">Shuffle Both</string>
+  <string name="widget_shuffle_home_description">Tap for the next home screen wallpaper. In live mode, it changes the live wallpaper.</string>
+  <string name="widget_shuffle_lock_description">Tap for the next lock screen wallpaper. In live mode, it changes the live wallpaper.</string>
+  <string name="widget_shuffle_both_description">Tap for the next wallpaper on each screen that\'s turned on. In live mode, it changes the live wallpaper.</string>
+  <string name="widget_not_set_up">Not set up</string>
+  <string name="widget_content_desc_not_set_up">%1$s, not set up</string>
+  <string name="widget_home_not_set_up">Turn on Home and pick its album in Paperize first.</string>
+  <string name="widget_lock_not_set_up">Turn on Lock and pick its album in Paperize first.</string>
+  <string name="widget_both_not_set_up">Turn on Home or Lock and pick an album in Paperize first.</string>
+  <string name="widget_live_no_album">Pick an album for the live wallpaper in Paperize first.</string>
+  <string name="widget_changing_lock">Changing the lock screen wallpaper…</string>
+
+  <!-- Live auto-pan (fork plan 4.2) -->
+  <string name="auto_pan">Auto-Pan Cut-Off Images</string>
+  <string name="auto_pan_description">Slowly moves across the parts of an image that Fill or None cuts off: up and down for tall images, side to side for wide ones. On wide images it takes the place of parallax.</string>
+  <string name="auto_pan_needs_fill_or_none">Works with Fill or None scaling.</string>
+  <string name="auto_pan_speed">Speed</string>
+  <plurals name="auto_pan_sweep_seconds">
+    <item quantity="one">%d second per sweep</item>
+    <item quantity="other">%d seconds per sweep</item>
+  </plurals>
+  <plurals name="auto_pan_sweep_minutes">
+    <item quantity="one">%d minute per sweep</item>
+    <item quantity="other">%d minutes per sweep</item>
+  </plurals>
 </resources>

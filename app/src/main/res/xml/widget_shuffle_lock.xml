@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One cell by default; resizes sideways to two cells, where it shows its name too. Updated only
+     when the settings change, never on a timer. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_shuffle_lock_description"
+    android:initialLayout="@layout/widget_shuffle_preview_lock"
+    android:maxResizeWidth="220dp"
+    android:minHeight="40dp"
+    android:minResizeHeight="40dp"
+    android:minResizeWidth="40dp"
+    android:minWidth="40dp"
+    android:previewImage="@drawable/widget_preview_lock"
+    android:previewLayout="@layout/widget_shuffle_preview_lock"
+    android:resizeMode="horizontal"
+    android:targetCellHeight="1"
+    android:targetCellWidth="1"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

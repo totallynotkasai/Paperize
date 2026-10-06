@@ -18,6 +18,9 @@ enum class ScalingType {
      */
     NONE;
 
+    /** Whether this scaling can leave part of an image off screen, which live auto-pan reveals. */
+    val canCutOff: Boolean get() = this == FILL || this == NONE
+
     companion object {
         fun fromString(value: String?): ScalingType {
             return entries.find { it.name.equals(value, ignoreCase = true) } ?: FILL

@@ -6,7 +6,9 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.util.Log
 import com.anthonyla.paperize.core.ScalingType
+import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.core.util.calculateDecodeSize
+import com.anthonyla.paperize.core.util.limitPixels
 import com.anthonyla.paperize.core.util.decodeSvg
 import com.anthonyla.paperize.core.util.isSvgDocument
 
@@ -38,9 +40,15 @@ class ContentUriImageLoader(
             val source = ImageDecoder.createSource(context.contentResolver, uri)
             ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
                 // ImageDecoder reports dimensions after applying EXIF orientation.
-                val (width, height) = calculateDecodeSize(
+                val (fullWidth, fullHeight) = calculateDecodeSize(
                     info.size.width, info.size.height, targetWidth, targetHeight, scalingType
                 )
+                // None draws pixel for pixel, so only Fill may be decoded smaller than it is shown.
+                val (width, height) = if (scalingType == ScalingType.FILL) {
+                    limitPixels(fullWidth, fullHeight, Constants.MAX_LIVE_DECODE_PIXELS)
+                } else {
+                    fullWidth to fullHeight
+                }
                 decoder.setTargetSize(width, height)
                 decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             }

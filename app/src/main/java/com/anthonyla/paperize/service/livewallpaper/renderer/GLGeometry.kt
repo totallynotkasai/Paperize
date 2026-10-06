@@ -12,7 +12,12 @@ object GLGeometry {
     data class WallpaperTransform(
         val scaledWidth: Float,
         val scaledHeight: Float,
-        val horizontalOffset: Float
+        val horizontalOffset: Float,
+        /** Positive moves the image up. */
+        val verticalOffset: Float = 0f,
+        /** The way auto-pan moves the image, and how far it reaches past the screen that way. */
+        val panAxis: PanAxis = PanAxis.NONE,
+        val panOverflow: Float = 0f
     )
 
     data class CrossfadeAlphas(
@@ -34,6 +39,11 @@ object GLGeometry {
         return CrossfadeAlphas(current = 1f, next = nextAlpha)
     }
 
+    /**
+     * Size and position of the image on screen. With [autoPanEnabled], an image that Fill or None
+     * cuts off sits at [panPosition] along its pan axis (see [AutoPan]); parallax only moves
+     * sideways, so it gives way to a sideways pan.
+     */
     fun calculateWallpaperTransform(
         viewWidth: Float,
         viewHeight: Float,
@@ -42,7 +52,9 @@ object GLGeometry {
         scalingType: ScalingType,
         parallaxEnabled: Boolean,
         parallaxIntensity: Int,
-        normalizedOffsetX: Float
+        normalizedOffsetX: Float,
+        autoPanEnabled: Boolean = false,
+        panPosition: Float = 0f
     ): WallpaperTransform {
         require(viewWidth > 0f && viewHeight > 0f)
         require(imageWidth > 0f && imageHeight > 0f)
@@ -56,9 +68,15 @@ object GLGeometry {
             ScalingType.NONE -> 1f to 1f
         }
 
+        val panAxis = if (autoPanEnabled) {
+            AutoPan.axis(scalingType, viewWidth, viewHeight, imageWidth * baseScaleX, imageHeight * baseScaleY)
+        } else {
+            PanAxis.NONE
+        }
+
         var effectiveScaleX = baseScaleX
         var effectiveScaleY = baseScaleY
-        val intensity = if (parallaxEnabled) {
+        val intensity = if (parallaxEnabled && panAxis != PanAxis.HORIZONTAL) {
             parallaxIntensity.coerceIn(0, 100) / 100f
         } else {
             0f
@@ -77,11 +95,26 @@ object GLGeometry {
         val scaledWidth = imageWidth * effectiveScaleX
         val scaledHeight = imageHeight * effectiveScaleY
         val extraWidth = max(0f, scaledWidth - viewWidth)
+        val extraHeight = max(0f, scaledHeight - viewHeight)
         val offset = normalizedOffsetX.coerceIn(0f, 1f)
+        val pan = panPosition.coerceIn(0f, 1f)
         return WallpaperTransform(
             scaledWidth = scaledWidth,
             scaledHeight = scaledHeight,
-            horizontalOffset = extraWidth * intensity * (0.5f - offset)
+            // Position 0 shows the left edge, as parallax does on the first home-screen page.
+            horizontalOffset = if (panAxis == PanAxis.HORIZONTAL) {
+                extraWidth * (0.5f - pan)
+            } else {
+                extraWidth * intensity * (0.5f - offset)
+            },
+            // Position 0 shows the top edge.
+            verticalOffset = if (panAxis == PanAxis.VERTICAL) extraHeight * (pan - 0.5f) else 0f,
+            panAxis = panAxis,
+            panOverflow = when (panAxis) {
+                PanAxis.HORIZONTAL -> extraWidth
+                PanAxis.VERTICAL -> extraHeight
+                PanAxis.NONE -> 0f
+            }
         )
     }
 

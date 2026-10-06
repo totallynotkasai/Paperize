@@ -14,6 +14,8 @@ class WallpaperRequestTest {
             WallpaperRequest.Change(ScreenType.LOCK),
             WallpaperRequest.Change(ScreenType.HOME, keepSchedule = true),
             WallpaperRequest.Change(ScreenType.BOTH, followMode = true),
+            // A Shuffle Lock widget's tap.
+            WallpaperRequest.Change(ScreenType.LOCK, followMode = true),
             WallpaperRequest.ApplySpecific("wallpaper", ScreenType.BOTH),
             WallpaperRequest.Reapply(ScreenType.HOME)
         ).forEach { request ->

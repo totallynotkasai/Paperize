@@ -55,6 +55,7 @@ import com.anthonyla.paperize.domain.model.WallpaperEffects
 import com.anthonyla.paperize.domain.model.ScheduleSettings
 import com.anthonyla.paperize.presentation.common.components.SettingSwitchItem
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.AlbumSelectionBottomSheet
+import com.anthonyla.paperize.presentation.screens.wallpaper.components.AutoPanSetting
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.CurrentLiveWallpaperPreview
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.CurrentWallpaperPreview
 import com.anthonyla.paperize.presentation.screens.wallpaper.components.LiveWallpaperBanner
@@ -571,6 +572,25 @@ fun WallpaperScreen(
                             updateSettingsDeferRender(
                                 scheduleSettings.copy(
                                     liveEffects = scheduleSettings.liveEffects.copy(parallaxIntensity = homePercent)
+                                )
+                            )
+                        }
+                    )
+                    AutoPanSetting(
+                        checked = scheduleSettings.liveEffects.enableAutoPan,
+                        sweepSeconds = scheduleSettings.liveEffects.autoPanSweepSeconds,
+                        available = scheduleSettings.liveScalingType.canCutOff,
+                        onCheckedChange = { enabled ->
+                            updateSettingsImmediate(
+                                scheduleSettings.copy(
+                                    liveEffects = scheduleSettings.liveEffects.copy(enableAutoPan = enabled)
+                                )
+                            )
+                        },
+                        onSweepSecondsChange = { seconds ->
+                            updateSettingsImmediate(
+                                scheduleSettings.copy(
+                                    liveEffects = scheduleSettings.liveEffects.copy(autoPanSweepSeconds = seconds)
                                 )
                             )
                         }

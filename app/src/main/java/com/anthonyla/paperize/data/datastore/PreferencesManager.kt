@@ -118,7 +118,10 @@ class PreferencesManager @Inject constructor(
             enableDoubleTap = prefs[booleanPreferencesKey(PreferenceKeys.LIVE_ENABLE_DOUBLE_TAP)] ?: false,
             enableChangeOnScreenOff = prefs[booleanPreferencesKey(PreferenceKeys.LIVE_ENABLE_CHANGE_ON_SCREEN_OFF)] ?: false,
             enableParallax = prefs[booleanPreferencesKey(PreferenceKeys.LIVE_ENABLE_PARALLAX)] ?: false,
-            parallaxIntensity = prefs[intPreferencesKey(PreferenceKeys.LIVE_PARALLAX_INTENSITY)] ?: Constants.DEFAULT_PARALLAX_INTENSITY
+            parallaxIntensity = prefs[intPreferencesKey(PreferenceKeys.LIVE_PARALLAX_INTENSITY)] ?: Constants.DEFAULT_PARALLAX_INTENSITY,
+            enableAutoPan = prefs[booleanPreferencesKey(PreferenceKeys.LIVE_ENABLE_AUTO_PAN)] ?: false,
+            autoPanSweepSeconds = prefs[intPreferencesKey(PreferenceKeys.LIVE_AUTO_PAN_SWEEP_SECONDS)]
+                ?: Constants.DEFAULT_AUTO_PAN_SWEEP_SECONDS
         ),
         adaptiveBrightness = prefs[booleanPreferencesKey(PreferenceKeys.ADAPTIVE_BRIGHTNESS)] ?: false
     )
@@ -194,6 +197,8 @@ class PreferencesManager @Inject constructor(
             prefs[booleanPreferencesKey(PreferenceKeys.LIVE_ENABLE_CHANGE_ON_SCREEN_OFF)] = settings.liveEffects.enableChangeOnScreenOff
             prefs[booleanPreferencesKey(PreferenceKeys.LIVE_ENABLE_PARALLAX)] = settings.liveEffects.enableParallax
             prefs[intPreferencesKey(PreferenceKeys.LIVE_PARALLAX_INTENSITY)] = settings.liveEffects.parallaxIntensity
+            prefs[booleanPreferencesKey(PreferenceKeys.LIVE_ENABLE_AUTO_PAN)] = settings.liveEffects.enableAutoPan
+            prefs[intPreferencesKey(PreferenceKeys.LIVE_AUTO_PAN_SWEEP_SECONDS)] = settings.liveEffects.autoPanSweepSeconds
 
             prefs[booleanPreferencesKey(PreferenceKeys.ADAPTIVE_BRIGHTNESS)] = settings.adaptiveBrightness
         }

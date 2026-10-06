@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ring in the container colour keeps the badge apart from the glyph it overlaps. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/widget_badge" />
+    <stroke android:width="2dp" android:color="@color/widget_container" />
+</shape>

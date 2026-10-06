@@ -5,6 +5,7 @@ import android.opengl.GLES20
 import android.opengl.GLUtils
 import android.util.Log
 import com.anthonyla.paperize.service.livewallpaper.renderer.GLGeometry
+import com.anthonyla.paperize.service.livewallpaper.renderer.PanClock
 import java.nio.FloatBuffer
 import kotlin.math.ceil
 import kotlin.math.min
@@ -24,6 +25,9 @@ class GLPicture(
         private const val TAG = "GLPicture"
 
     }
+
+    /** Each new picture starts its auto-pan afresh. */
+    val panClock = PanClock()
 
     val width = bitmap.width
     val height = bitmap.height

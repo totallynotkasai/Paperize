@@ -40,6 +40,11 @@ abstract class GLWallpaperService : WallpaperService() {
             glThread?.requestRender()
         }
 
+        /** Draw a frame in [delayMs], unless one is drawn sooner; animations pace themselves with it. */
+        fun requestRenderAfter(delayMs: Long) {
+            glThread?.requestRenderAt(System.nanoTime() + delayMs * 1_000_000L)
+        }
+
         fun queueEvent(runnable: Runnable): Boolean = glThread?.queueEvent(runnable) ?: false
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
@@ -94,6 +99,8 @@ abstract class GLWallpaperService : WallpaperService() {
         private var width = 0
         private var height = 0
         private var requestRender = true
+        /** System.nanoTime() at which to draw the next frame; 0 when none is scheduled. */
+        private var renderDueNanos = 0L
         private var sizeChanged = true
 
         private var egl: EGL10? = null
@@ -105,6 +112,14 @@ abstract class GLWallpaperService : WallpaperService() {
         fun requestRender() {
             synchronized(lock) {
                 requestRender = true
+                lock.notifyAll()
+            }
+        }
+
+        /** The latest schedule wins; any frame drawn earlier clears it. */
+        fun requestRenderAt(dueNanos: Long) {
+            synchronized(lock) {
+                renderDueNanos = dueNanos
                 lock.notifyAll()
             }
         }
@@ -173,8 +188,15 @@ abstract class GLWallpaperService : WallpaperService() {
                             // Drain accepted events (including renderer cleanup) before releasing EGL.
                             if (shouldExit) return
 
-                            if (!paused && width > 0 && height > 0 && requestRender) {
+                            // While paused (the wallpaper is hidden) a scheduled frame waits; resuming
+                            // draws one anyway.
+                            val canDraw = !paused && width > 0 && height > 0
+                            val untilDue = if (renderDueNanos != 0L) renderDueNanos - System.nanoTime() else 0L
+                            if (canDraw && renderDueNanos != 0L && untilDue <= 0L) requestRender = true
+
+                            if (canDraw && requestRender) {
                                 requestRender = false
+                                renderDueNanos = 0L
                                 if (sizeChanged) {
                                     newSize = width to height
                                     sizeChanged = false
@@ -182,7 +204,11 @@ abstract class GLWallpaperService : WallpaperService() {
                                 break
                             }
 
-                            lock.wait()
+                            if (canDraw && untilDue > 0L) {
+                                lock.wait(untilDue / 1_000_000L, (untilDue % 1_000_000L).toInt())
+                            } else {
+                                lock.wait()
+                            }
                         }
                     }
 

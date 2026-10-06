@@ -13,9 +13,9 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Inject
 
 /**
- * The one way to ask for a wallpaper change: from the app, the Quick Settings tile or the launcher
- * shortcut. Android 12+ refuses to start a foreground service from the background, so a refused
- * start runs the same request as a background job instead of crashing or being lost.
+ * The one way to ask for a wallpaper change: from the app, the Quick Settings tile, the launcher
+ * shortcut or the widgets. Android 12+ refuses to start a foreground service from the background,
+ * so a refused start runs the same request as a background job instead of crashing or being lost.
  */
 class WallpaperChangeRequests @Inject constructor(
     @param:ApplicationContext private val context: Context,
@@ -28,8 +28,12 @@ class WallpaperChangeRequests @Inject constructor(
     fun change(screen: ScreenType, keepSchedule: Boolean = false, report: Boolean = false) =
         send(WallpaperRequest.Change(screen, keepSchedule), report)
 
-    /** Tile and shortcut: the configured static screens, or the live wallpaper in live mode. */
-    fun changeConfigured() = send(WallpaperRequest.Change(ScreenType.BOTH, followMode = true), report = false)
+    /**
+     * Tile, shortcut and widgets: [screen] (by default every turned-on static screen), or the live
+     * wallpaper in live mode.
+     */
+    fun changeConfigured(screen: ScreenType = ScreenType.BOTH) =
+        send(WallpaperRequest.Change(screen, followMode = true), report = false)
 
     /** Put a chosen image on [screen]; the outcome is shown on the visible screen. */
     fun applySpecific(wallpaperId: String, screen: ScreenType) =

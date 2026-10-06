@@ -19,13 +19,21 @@ data class WallpaperEffects(
     val enableDoubleTap: Boolean = false,
     val enableChangeOnScreenOff: Boolean = false,
     val enableParallax: Boolean = false,
-    val parallaxIntensity: Int = Constants.DEFAULT_PARALLAX_INTENSITY
+    val parallaxIntensity: Int = Constants.DEFAULT_PARALLAX_INTENSITY,
+    /** Slowly pan across images that Fill or None cuts off (live only). */
+    val enableAutoPan: Boolean = false,
+    /** Seconds for one pass from one edge of the image to the other. */
+    val autoPanSweepSeconds: Int = Constants.DEFAULT_AUTO_PAN_SWEEP_SECONDS
 ) {
     fun validate(): WallpaperEffects = copy(
         darkenPercentage = darkenPercentage.coerceIn(0, 100),
         blurPercentage = blurPercentage.coerceIn(0, 100),
         vignettePercentage = vignettePercentage.coerceIn(0, 100),
         grayscalePercentage = grayscalePercentage.coerceIn(0, 100),
-        parallaxIntensity = parallaxIntensity.coerceIn(0, 100)
+        parallaxIntensity = parallaxIntensity.coerceIn(0, 100),
+        autoPanSweepSeconds = autoPanSweepSeconds.coerceIn(
+            Constants.AUTO_PAN_SWEEP_STEPS_SECONDS.min(),
+            Constants.AUTO_PAN_SWEEP_STEPS_SECONDS.max()
+        )
     )
 }

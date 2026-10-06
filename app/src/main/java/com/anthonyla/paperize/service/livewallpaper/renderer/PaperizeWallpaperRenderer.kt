@@ -42,6 +42,9 @@ class PaperizeWallpaperRenderer(
         fun queueEventOnGlThread(event: () -> Unit): Boolean
         fun requestRender()
 
+        /** Draw a frame in [delayMs] (auto-pan paces itself); only while the wallpaper is visible. */
+        fun requestRenderAfter(delayMs: Long)
+
         /** Called on the GL thread once [loader]'s image has been uploaded for display. */
         fun onWallpaperShown(loader: ImageLoader) {}
     }
@@ -185,12 +188,19 @@ class PaperizeWallpaperRenderer(
             hasNextPicture = next != null
         )
 
+        val frameNanos = System.nanoTime()
+        // The soonest frame a panning picture needs; null when nothing pans.
+        var panFrameDelayMs: Long? = null
+        fun needsFrameIn(delayMs: Long?) {
+            if (delayMs != null) panFrameDelayMs = minOf(delayMs, panFrameDelayMs ?: delayMs)
+        }
+
         current?.let { picture ->
-            drawPictureWithEffects(picture, crossfadeAlphas.current, blurRadius)
+            needsFrameIn(drawPictureWithEffects(picture, crossfadeAlphas.current, blurRadius, frameNanos))
         }
 
         next?.let { picture ->
-            drawPictureWithEffects(picture, crossfadeAlphas.next, blurRadius)
+            needsFrameIn(drawPictureWithEffects(picture, crossfadeAlphas.next, blurRadius, frameNanos))
 
             if (crossfadeProgress >= 1.0f) {
                 currentPicture?.recycle()
@@ -203,16 +213,25 @@ class PaperizeWallpaperRenderer(
                 callbacks.requestRender()
             }
         }
+
+        panFrameDelayMs?.let(callbacks::requestRenderAfter)
     }
 
-    private fun drawPictureWithEffects(picture: GLPicture, alpha: Float, blurRadius: Float) {
-        calculateMvpMatrix(picture, mvpMatrix)
+    /** Returns how soon the next frame is needed to keep this picture's auto-pan moving, if it pans. */
+    private fun drawPictureWithEffects(picture: GLPicture, alpha: Float, blurRadius: Float, frameNanos: Long): Long? {
+        val effects = currentEffects
+        val sweepMs = effects.autoPanSweepSeconds * 1000L
+        if (effects.enableAutoPan) picture.panClock.advance(frameNanos, sweepMs)
+        val transform = calculateMvpMatrix(picture, mvpMatrix, effects)
 
         if (blurRadius > Constants.BLUR_MIN_THRESHOLD) {
             drawWithBlur(picture, alpha, blurRadius)
         } else {
             drawWithColorEffects(picture, alpha)
         }
+
+        if (transform.panAxis == PanAxis.NONE) return null
+        return AutoPan.frameDelayMs(transform.panOverflow, picture.panClock.phase, sweepMs)
     }
 
     /**
@@ -287,7 +306,11 @@ class PaperizeWallpaperRenderer(
 
     }
 
-    private fun calculateMvpMatrix(picture: GLPicture, matrix: FloatArray) {
+    private fun calculateMvpMatrix(
+        picture: GLPicture,
+        matrix: FloatArray,
+        effects: WallpaperEffects
+    ): GLGeometry.WallpaperTransform {
         val viewWidth = surfaceWidth.toFloat()
         val viewHeight = surfaceHeight.toFloat()
         val imageWidth = picture.width.toFloat()
@@ -299,13 +322,15 @@ class PaperizeWallpaperRenderer(
             imageWidth = imageWidth,
             imageHeight = imageHeight,
             scalingType = currentScalingType,
-            parallaxEnabled = currentEffects.enableParallax,
-            parallaxIntensity = currentEffects.parallaxIntensity,
-            normalizedOffsetX = normalOffsetX
+            parallaxEnabled = effects.enableParallax,
+            parallaxIntensity = effects.parallaxIntensity,
+            normalizedOffsetX = normalOffsetX,
+            autoPanEnabled = effects.enableAutoPan,
+            panPosition = AutoPan.position(picture.panClock.phase)
         )
 
         Matrix.orthoM(matrix, 0, -viewWidth / 2f, viewWidth / 2f, -viewHeight / 2f, viewHeight / 2f, -1f, 1f)
-        Matrix.translateM(matrix, 0, transform.horizontalOffset, 0f, 0f)
+        Matrix.translateM(matrix, 0, transform.horizontalOffset, transform.verticalOffset, 0f)
         // The quad spans -1..1, so scale by half the displayed image dimensions.
         Matrix.scaleM(
             matrix,
@@ -314,6 +339,7 @@ class PaperizeWallpaperRenderer(
             transform.scaledHeight / 2f,
             1f
         )
+        return transform
     }
 
     private fun drawQuad(aPositionHandle: Int, aTexCoordHandle: Int, uMvpMatrixHandle: Int, mvpMatrix: FloatArray) {
@@ -532,7 +558,8 @@ class PaperizeWallpaperRenderer(
                 "darken=${effects.enableDarken}/${effects.darkenPercentage}, " +
                 "vignette=${effects.enableVignette}/${effects.vignettePercentage}, " +
                 "grayscale=${effects.enableGrayscale}/${effects.grayscalePercentage}, " +
-                "parallax=${effects.enableParallax}/${effects.parallaxIntensity}")
+                "parallax=${effects.enableParallax}/${effects.parallaxIntensity}, " +
+                "autoPan=${effects.enableAutoPan}/${effects.autoPanSweepSeconds}s")
         callbacks.requestRender()
     }
 

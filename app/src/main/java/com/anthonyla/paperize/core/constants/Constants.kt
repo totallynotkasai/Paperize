@@ -107,6 +107,13 @@ object Constants {
     const val PERCENTAGE_DIVISOR = 100f
     const val GL_ES_VERSION = 2
 
+    // Live auto-pan (fork plan 4.2). A sweep is one pass from one edge of the image to the other.
+    const val DEFAULT_AUTO_PAN_SWEEP_SECONDS = 60
+    /** The speed slider's stops, slowest first. */
+    val AUTO_PAN_SWEEP_STEPS_SECONDS = listOf(300, 180, 120, 90, 60, 45, 30, 20, 15, 10)
+    /** Live images are decoded with at most this many pixels, so panoramas fit in memory. */
+    const val MAX_LIVE_DECODE_PIXELS = 4096L * 4096L
+
     // Wallpaper loading
     const val MAX_WALLPAPER_LOAD_RETRIES = 10
 
@@ -178,6 +185,8 @@ object PreferenceKeys {
     const val LIVE_ENABLE_CHANGE_ON_SCREEN_OFF = "live_enable_change_on_screen_off"
     const val LIVE_ENABLE_PARALLAX = "live_enable_parallax"
     const val LIVE_PARALLAX_INTENSITY = "live_parallax_intensity"
+    const val LIVE_ENABLE_AUTO_PAN = "live_enable_auto_pan"
+    const val LIVE_AUTO_PAN_SWEEP_SECONDS = "live_auto_pan_sweep_seconds"
 
     // Scaling
     const val HOME_SCALING_TYPE = "home_scaling_type"

@@ -96,6 +96,41 @@
             </intent-filter>
         </service>
 
+        <!-- Home-screen widgets: Shuffle Home, Shuffle Lock, Shuffle Both -->
+        <receiver
+            android:name=".service.widget.ShuffleHomeWidget"
+            android:exported="false"
+            android:label="@string/widget_shuffle_home">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_shuffle_home" />
+        </receiver>
+        <receiver
+            android:name=".service.widget.ShuffleLockWidget"
+            android:exported="false"
+            android:label="@string/widget_shuffle_lock">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_shuffle_lock" />
+        </receiver>
+        <receiver
+            android:name=".service.widget.ShuffleBothWidget"
+            android:exported="false"
+            android:label="@string/widget_shuffle_both">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_shuffle_both" />
+        </receiver>
+
         <!-- Live Wallpaper Service -->
         <service
             android:name=".service.livewallpaper.PaperizeLiveWallpaperService"

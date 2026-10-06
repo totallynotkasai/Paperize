@@ -10,6 +10,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.work.Configuration
 import com.anthonyla.paperize.core.constants.Constants
 import com.anthonyla.paperize.core.util.DataResetManager
+import com.anthonyla.paperize.service.widget.ShuffleWidgets
 import com.anthonyla.paperize.service.worker.AlbumRefreshScheduler
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -20,6 +21,9 @@ class PaperizeApplication : Application(), Configuration.Provider, DefaultLifecy
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
+    @Inject
+    lateinit var shuffleWidgets: ShuffleWidgets
+
     override fun onCreate() {
         super<Application>.onCreate()
 
@@ -28,6 +32,9 @@ class PaperizeApplication : Application(), Configuration.Provider, DefaultLifecy
         DataResetManager.performResetIfNeeded(this)
 
         createNotificationChannels()
+
+        // Placed widgets grey out while their screen can't change, and back again once it can.
+        shuffleWidgets.keepInStep()
 
         // Process lifecycle distinguishes real background/foreground transitions from activity
         // recreation, so folder-backed albums are refreshed whenever the user returns to the app.

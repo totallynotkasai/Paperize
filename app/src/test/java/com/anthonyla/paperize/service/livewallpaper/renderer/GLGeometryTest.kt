@@ -95,6 +95,82 @@ class GLGeometryTest {
         )
     }
 
+    @Test
+    fun `auto-pan moves a tall image from its top edge to its bottom edge`() {
+        val top = tallTransform(panPosition = 0f)
+        val middle = tallTransform(panPosition = 0.5f)
+        val bottom = tallTransform(panPosition = 1f)
+
+        assertEquals(PanAxis.VERTICAL, top.panAxis)
+        assertEquals(200f, top.panOverflow, 0.001f)
+        // Moving the image down by half its overflow lines its top edge up with the screen's.
+        assertEquals(-100f, top.verticalOffset, 0.001f)
+        assertEquals(0f, middle.verticalOffset, 0.001f)
+        assertEquals(100f, bottom.verticalOffset, 0.001f)
+        assertEquals(0f, top.horizontalOffset, 0.001f)
+    }
+
+    @Test
+    fun `a sideways pan takes the place of parallax`() {
+        val left = autoPanned(ScalingType.FILL, panPosition = 0f, offset = 1f)
+        val middle = autoPanned(ScalingType.FILL, panPosition = 0.5f, offset = 0f)
+        val right = autoPanned(ScalingType.FILL, panPosition = 1f, offset = 0f)
+
+        assertEquals(PanAxis.HORIZONTAL, left.panAxis)
+        assertEquals(150f, left.horizontalOffset, 0.001f)
+        // The launcher's page offset no longer moves the image.
+        assertEquals(0f, middle.horizontalOffset, 0.001f)
+        assertEquals(-150f, right.horizontalOffset, 0.001f)
+        assertEquals(0f, middle.verticalOffset, 0.001f)
+    }
+
+    @Test
+    fun `parallax keeps working sideways while a tall image pans up and down`() {
+        val result = tallTransform(panPosition = 0f, parallax = true)
+
+        assertEquals(PanAxis.VERTICAL, result.panAxis)
+        // Parallax zooms in to get 20% extra width, which also adds height to pan across.
+        assertEquals(120f, result.scaledWidth, 0.001f)
+        assertEquals(10f, result.horizontalOffset, 0.001f)
+        assertEquals(-140f, result.verticalOffset, 0.001f)
+    }
+
+    @Test
+    fun `Fit never pans, and parallax behaves as before`() {
+        val result = autoPanned(ScalingType.FIT, panPosition = 1f, offset = 0f)
+
+        assertEquals(PanAxis.NONE, result.panAxis)
+        assertEquals(transform(ScalingType.FIT, offset = 0f), result)
+    }
+
+    private fun tallTransform(panPosition: Float, parallax: Boolean = false) =
+        GLGeometry.calculateWallpaperTransform(
+            viewWidth = 100f,
+            viewHeight = 200f,
+            imageWidth = 100f,
+            imageHeight = 400f,
+            scalingType = ScalingType.FILL,
+            parallaxEnabled = parallax,
+            parallaxIntensity = 100,
+            normalizedOffsetX = 0f,
+            autoPanEnabled = true,
+            panPosition = panPosition
+        )
+
+    private fun autoPanned(scalingType: ScalingType, panPosition: Float, offset: Float) =
+        GLGeometry.calculateWallpaperTransform(
+            viewWidth = 100f,
+            viewHeight = 200f,
+            imageWidth = 400f,
+            imageHeight = 200f,
+            scalingType = scalingType,
+            parallaxEnabled = true,
+            parallaxIntensity = 100,
+            normalizedOffsetX = offset,
+            autoPanEnabled = true,
+            panPosition = panPosition
+        )
+
     private fun transform(
         scalingType: ScalingType,
         offset: Float,

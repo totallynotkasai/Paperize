@@ -109,6 +109,7 @@ class LiveWallpaperShaderInstrumentedTest {
         val renderer = PaperizeWallpaperRenderer(app, object : PaperizeWallpaperRenderer.Callbacks {
             override fun queueEventOnGlThread(event: () -> Unit): Boolean = uploads.offer(event)
             override fun requestRender() { renderRequests++ }
+            override fun requestRenderAfter(delayMs: Long) = Unit
         })
         val egl = javax.microedition.khronos.egl.EGLContext.getEGL() as javax.microedition.khronos.egl.EGL10
         val gl = egl.eglGetCurrentContext().gl as javax.microedition.khronos.opengles.GL10
@@ -168,6 +169,62 @@ class LiveWallpaperShaderInstrumentedTest {
             renderer.destroy()
             file.delete()
             replacement.delete()
+        }
+    }
+
+    @Test
+    fun autoPanStartsAtTheTopOfATallImageAndPacesItsFrames() {
+        val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val uploads = java.util.concurrent.LinkedBlockingQueue<() -> Unit>()
+        val frameDelays = mutableListOf<Long>()
+        val renderer = PaperizeWallpaperRenderer(app, object : PaperizeWallpaperRenderer.Callbacks {
+            override fun queueEventOnGlThread(event: () -> Unit): Boolean = uploads.offer(event)
+            override fun requestRender() = Unit
+            override fun requestRenderAfter(delayMs: Long) { frameDelays += delayMs }
+        })
+        val egl = javax.microedition.khronos.egl.EGLContext.getEGL() as javax.microedition.khronos.egl.EGL10
+        val gl = egl.eglGetCurrentContext().gl as javax.microedition.khronos.opengles.GL10
+        val config = com.anthonyla.paperize.service.livewallpaper.gl.WallpaperEglConfigChooser()
+            .chooseConfig(egl, egl.eglGetCurrentDisplay())
+        val file = java.io.File.createTempFile("live-auto-pan", ".png", app.cacheDir)
+        try {
+            // Twice as tall as wide, red above blue: Fill on a square screen cuts half of it off.
+            val tall = Bitmap.createBitmap(SIZE, SIZE * 2, Bitmap.Config.ARGB_8888).apply {
+                for (y in 0 until SIZE * 2) for (x in 0 until SIZE) setPixel(x, y, if (y < SIZE) Color.RED else Color.BLUE)
+            }
+            file.outputStream().use { tall.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            tall.recycle()
+            renderer.onSurfaceCreated(gl, config)
+            renderer.onSurfaceChanged(gl, SIZE, SIZE)
+            renderer.updateEffects(com.anthonyla.paperize.domain.model.WallpaperEffects(enableAutoPan = true))
+            renderer.queueWallpaper(ContentUriImageLoader(app, android.net.Uri.fromFile(file)), skipCrossfade = true)
+            checkNotNull(uploads.poll(5, java.util.concurrent.TimeUnit.SECONDS)).invoke()
+
+            renderer.onDrawFrame(gl)
+            // A new image starts at its top edge, so even the bottom of the screen is red. GL rows
+            // count from the bottom.
+            val bottom = readPixel(SIZE / 2, 1)
+            assertTrue("bottom pixel ${Integer.toHexString(bottom)}", Color.red(bottom) >= 250 && Color.blue(bottom) <= 5)
+            assertEquals(1, frameDelays.size)
+            assertTrue(frameDelays.single() in AutoPan.MIN_FRAME_INTERVAL_MS..AutoPan.MAX_FRAME_INTERVAL_MS)
+
+            // Turned off, the image is centred again and no further frames are scheduled.
+            frameDelays.clear()
+            renderer.updateEffects(com.anthonyla.paperize.domain.model.WallpaperEffects())
+            renderer.onDrawFrame(gl)
+            assertTrue(Color.blue(readPixel(SIZE / 2, 1)) >= 250)
+            assertTrue(Color.red(readPixel(SIZE / 2, SIZE - 2)) >= 250)
+            assertEquals(emptyList<Long>(), frameDelays)
+
+            // Fit shows the whole image, so there is nothing to pan.
+            renderer.updateEffects(com.anthonyla.paperize.domain.model.WallpaperEffects(enableAutoPan = true))
+            renderer.updateScalingType(com.anthonyla.paperize.core.ScalingType.FIT)
+            renderer.onDrawFrame(gl)
+            assertEquals(emptyList<Long>(), frameDelays)
+            GLUtil.checkGLError("auto-pan frames")
+        } finally {
+            renderer.destroy()
+            file.delete()
         }
     }
 

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget picker preview for launchers that don't draw previewLayout; matches the compact layout. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="64dp"
+        android:height="64dp"
+        android:drawable="@drawable/widget_shape" />
+    <item
+        android:width="30dp"
+        android:height="30dp"
+        android:drawable="@drawable/ic_widget_lock"
+        android:gravity="center" />
+    <item
+        android:width="20dp"
+        android:height="20dp"
+        android:drawable="@drawable/widget_badge_preview"
+        android:end="8dp"
+        android:gravity="top|end"
+        android:top="8dp" />
+</layer-list>
