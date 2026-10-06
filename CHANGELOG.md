@@ -31,6 +31,26 @@
 - Finishing onboarding no longer rebuilds the app's navigation.
 - Double-tapping the live wallpaper or changing it on screen-off restarts the background countdown, like the tile and shortcut.
 
+### Interface and accessibility
+- The image viewer is readable in dark theme: it always shows the image on black with light controls, and its back button has a full-size touch area.
+- Dark mode is now a System / Light / Dark choice.
+- "Change wallpaper now" and "Set wallpaper" show that they are working and then say what happened. Problems get their own notification channel, which makes a sound by default.
+- The Quick Settings tile has a proper icon and the label "Next wallpaper", shows whether automatic changing is on or paused, and is greyed out until an album is chosen.
+- Folders in an album show their cover and image count, and album cards show how many wallpapers they hold. Screen readers no longer hear names twice, and the Home and Lock cards are announced as switches.
+- Setting descriptions no longer disappear when a switch is turned on. Horizontal scrolling is offered only where it works: the home screen with Fill.
+- The splash screen stays until settings have loaded, so the app opens in the right theme without a blank frame.
+- Imports keep running if you leave the album; hide the progress dialog to keep browsing.
+
+### Wallpaper rendering
+- The live wallpaper's vignette no longer changes when blur is switched on, and live blur and vignette now match the static wallpaper at the same strength (live blur is gentler than before).
+- If the GPU can't apply effects, blur now really happens on the CPU instead of being skipped.
+- Horizontal scrolling keeps at most three screens' width of a wide image, so very large panoramas no longer run out of memory.
+- Screen size detection ignores casting and other virtual displays on Android 12–16.
+- Wallpaper requests from the app, tile or shortcut that Android won't run in the foreground now run as a background job instead of crashing.
+
+### Development setup
+- Test fixtures shared by unit and device tests live in `app/src/sharedTest`; unused code and the JitPack repository were removed.
+
 ## v4.2.0
 
 ### Library and albums

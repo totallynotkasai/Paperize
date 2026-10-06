@@ -351,19 +351,122 @@ different images; effects change while paused; nothing double-changes.
 
 | ID | Item | Audit ref | Size | Status |
 |----|------|-----------|------|--------|
-| 3.1 | Image viewer readable in dark theme (title, back arrow, hint text) | #16 | S | ☐ |
-| 3.2 | Dark mode becomes System / Light / Dark | #17 | S | ☐ |
-| 3.3 | Fix Shuffle / Adaptive brightness description logic; show horizontal scrolling only when it does something (Fill + Home) | small | S | ☐ |
-| 3.4 | Feedback after "Set wallpaper" / "Change now"; separate, audible channel for error notifications | small | S | ☐ |
-| 3.5 | Quick Settings tile: proper monochrome icon, label, active/paused state | small | S | ☐ |
-| 3.6 | Folder tiles show their cover and image count; album cards show counts; no duplicate screen-reader labels | small | S | ☐ |
-| 3.7 | Live vignette looks the same with blur on or off; static and live blur/vignette strength match | #19 | M | ☐ |
-| 3.8 | Splash screen stays until settings have loaded (no blank frame) | small | S | ☐ |
-| 3.9 | Static rendering: real CPU blur fallback; cap panorama width with horizontal scrolling (prevents out-of-memory) | small | S | ☐ |
-| 3.10 | Remove dead code: unused constants, `Uri.isValid`, "both screens" current-wallpaper lookups, `.empty()` helpers (move to test fixtures), JitPack repo. **Keep** `FOREGROUND_SERVICE_SPECIAL_USE` (needed by 6.2). | small | S | ☐ |
-| 3.11 | Screen-size detection ignores casting/virtual displays on Android 12–16 | small | S | ☐ |
-| 3.12 | Guard background service starts (fall back to a background job instead of crashing) | small | S | ☐ |
-| 3.13 | Optional: imports keep running if you leave the album screen | — | M | ☐ |
+| 3.1 | Image viewer readable in dark theme (title, back arrow, hint text) | #16 | S | ☑ |
+| 3.2 | Dark mode becomes System / Light / Dark | #17 | S | ☑ |
+| 3.3 | Fix Shuffle / Adaptive brightness description logic; show horizontal scrolling only when it does something (Fill + Home) | small | S | ☑ |
+| 3.4 | Feedback after "Set wallpaper" / "Change now"; separate, audible channel for error notifications | small | S | ☑ |
+| 3.5 | Quick Settings tile: proper monochrome icon, label, active/paused state | small | S | ☑ |
+| 3.6 | Folder tiles show their cover and image count; album cards show counts; no duplicate screen-reader labels | small | S | ☑ |
+| 3.7 | Live vignette looks the same with blur on or off; static and live blur/vignette strength match | #19 | M | ☑ |
+| 3.8 | Splash screen stays until settings have loaded (no blank frame) | small | S | ☑ |
+| 3.9 | Static rendering: real CPU blur fallback; cap panorama width with horizontal scrolling (prevents out-of-memory) | small | S | ☑ |
+| 3.10 | Remove dead code: unused constants, `Uri.isValid`, "both screens" current-wallpaper lookups, `.empty()` helpers (move to test fixtures), JitPack repo. **Keep** `FOREGROUND_SERVICE_SPECIAL_USE` (needed by 6.2). | small | S | ☑ |
+| 3.11 | Screen-size detection ignores casting/virtual displays on Android 12–16 | small | S | ☑ |
+| 3.12 | Guard background service starts (fall back to a background job instead of crashing) | small | S | ☑ |
+| 3.13 | Optional: imports keep running if you leave the album screen | — | M | ☑ |
+
+**Phone check:** the image viewer in dark theme; System / Light / Dark; "Change wallpaper now"
+and "Set wallpaper" say what happened; a problem notification makes a sound; the tile shows On /
+Paused / No album; folder tiles show covers and counts; the live vignette looks the same with blur
+on and off; an import carries on after leaving the album.
+
+**Phase 3 notes and deviations:**
+- Work is on branch `phase-3/ui-polish`, branched from `phase-2/scheduling-settings` and kept local
+  like Phases 1 and 2. CI was run locally on Windows with the workflow's commands (`gradlew clean
+  test`, then `gradlew :app:lintDebug`) plus a debug build: 182/182 unit tests pass (142 before, 40
+  new), lint 0 errors and the same 18 warnings as the baseline (Phase 3 code briefly added a 19th,
+  `LocalContextResourcesRead`, which is fixed), debug build successful.
+- 3.1: the viewer now always shows the image on black with white controls, in either theme (the
+  old title and back arrow used a theme colour that is dark in dark theme). Beyond the plan: a soft
+  dark shading behind the top and bottom bars keeps them readable when a zoomed image runs under
+  them, the status and navigation bar icons turn light while the viewer is open, and the back
+  button has its full 48 dp touch area again (it was squeezed to 24 dp).
+- 3.2: a "Theme" card in Settings with System / Light / Dark buttons. "System" removes the stored
+  choice, which is what the app already treated as "follow the phone", so no settings migration:
+  anyone who had the old switch on or off now has Dark or Light.
+- 3.3: the descriptions stay visible whatever the switch says. **Beyond the plan:** "Double-tap to
+  change" and "Change on screen off" had the same hide-when-on logic and are fixed too. The
+  horizontal-scrolling switch moved into the Scaling card, under the Fill / Fit / Stretch / None
+  buttons, and appears only when Home is on with Fill. Its saved value is kept while it is hidden
+  (it only ever applied to Home with Fill).
+- 3.4: "Change wallpaper now" now sends one request covering every rotating screen (before, with
+  separate schedules, it sent one per screen; the effect is the same and each screen's countdown
+  still restarts). While it runs the button reads "Changing wallpaper…" and is disabled, then a
+  snackbar says "Wallpaper changed" or why not. The viewer's "Set wallpaper" works the same way
+  ("Setting wallpaper…", then "Wallpaper set"). A problem with a request made from the visible
+  screen is shown there instead of as a notification; if you have left the screen, it becomes a
+  notification as before. **Beyond the plan:** in live mode the snackbar says nothing changed when
+  Paperize isn't the live wallpaper. Notifications now use two channels: "Wallpaper changes" (the
+  existing silent channel, renamed from "Paperize") and a new "Problems" channel at default
+  importance, so it makes a sound unless you change it in Android's settings. Android keeps a
+  channel's importance once created, which is why problems needed a new channel.
+- 3.5: the tile is called "Next wallpaper" and uses a single-colour picture icon (the same drawing
+  as the notification icon, in its own `ic_tile` file). It is highlighted with "On" while
+  automatic changing runs, plain with "Paused" while it is paused, and greyed out with "No album"
+  until a turned-on screen has an album (Android ignores taps then). A tap always changes the
+  wallpaper, paused or not, as 6.1 expects of manual changes.
+- 3.6: folder tiles show the folder's cover, its name, "N wallpapers" over a dark gradient and a
+  small folder icon; a folder with no readable cover keeps the large folder icon. Screen readers
+  hear one label, "Folder Name, N wallpapers". Album cards show "N wallpapers" under the name, and
+  the cover no longer repeats the album name. **Beyond the plan,** other doubled labels found while
+  checking: the Wallpaper / Library tab icons, the album picker's rows (now one radio-button choice
+  that reports "selected" itself), the reorder screen's folder header, and the Home / Lock cards,
+  which now announce as switches ("Home, on") instead of reading "Enabled" as extra text.
+- 3.7: the live vignette is now worked out from the position on the screen in both drawing paths.
+  Before, without blur it followed the picture, which under Fill or parallax extends past the
+  screen edges, so switching blur on moved and strengthened it. Both static and live now use the
+  static wallpaper's vignette curve (a circle that shrinks as the strength rises, 80% dark at its
+  edge), and the same blur strength (Android's own radius-to-sigma rule, which the static path
+  already used). **Behaviour change for live mode:** at the same percentage the live blur is about
+  a third as strong as before (it was three times stronger than static), and the vignette's shape
+  changes. Static wallpapers look exactly as before.
+- 3.8: the splash screen stays until the settings are loaded, so the first frame already has the
+  right theme and start screen. The start-screen decision (2.10) moved from the activity into a
+  small `MainViewModel` and is kept in saved state, so it now also survives Android ending the app
+  in the background, not only activity re-creation.
+- 3.9: the CPU fallback (used only if the GPU effects pipeline fails) used to call the GPU again,
+  so it never blurred. It now blurs on the CPU with three box blurs that match the GPU's Gaussian;
+  strong blurs run on a copy up to 4× smaller to save time and memory. Horizontal scrolling keeps
+  at most **3 screen widths** of a wide image and one screen of height (launchers only scroll
+  sideways); the rest is cropped evenly from both sides while decoding, so a huge panorama never
+  needs the memory. SVGs are rendered at full size by Coil first and cropped afterwards.
+- 3.10: removed five unused constants (`DEBOUNCE_DELAY_MS`, `PERMISSION_SCREEN_TRANSITION_DELAY_MS`,
+  `WALLPAPER_CHANGE_DEBOUNCE_MS`, `WALLPAPER_READ_INITIAL_DELAY_MS`, `MAX_QUEUE_REBUILD_ATTEMPTS`),
+  `Uri.isValid`, the GPU-calling `blurBitmap`, the "both screens" preview lookups (since Phase 2
+  each screen records its own current image; a 4.2.0 database could still hold old "both" rows,
+  which only means no preview until the next change, and your 7.3 install starts fresh anyway), and
+  the JitPack repository (no dependency comes from it; the build resolves without it). The
+  `.empty()` helpers became `emptyAlbum()` and friends in `app/src/sharedTest`, which the build
+  adds to both unit and device tests. Also removed while there: the old Android 14 branch around
+  `startForeground` (the typed call works on every supported version), `SettingsViewModel.
+  updateFirstLaunch` (moved to `MainViewModel`), and the two strings of the old dark-mode switch.
+  `FOREGROUND_SERVICE_SPECIAL_USE` is kept.
+- 3.11: on Android 12–16 only the default display is measured; their display list also holds
+  casting, mirroring and other virtual displays, which can be much larger (a 4K TV). Android 17+
+  still measures every built-in panel, folded away or not.
+- 3.12: every wallpaper request (app, tile, shortcut, image viewer) goes through
+  `WallpaperChangeRequests`. If Android refuses the foreground service, the same request runs as an
+  expedited one-time background job (`WallpaperRequestWorker`) through the same handler, so it
+  behaves the same, including notifications and schedule resets. The service also guards its own
+  `startForeground` call (Android 15 can refuse data-sync services once their daily time is used
+  up) and hands over to the job the same way.
+- 3.13 (optional, done): imports run outside the album screen, one at a time per album. The
+  progress dialog has "Hide" (Back also hides it), which leaves a progress card with Cancel at the
+  top of the album; tapping the card reopens the dialog. If the import finishes while the album is
+  closed, its message ("2 files were skipped…") appears next time the album opens. **Limit:** there
+  is no foreground service, so the import carries on only while Android keeps Paperize running; if
+  Android ends the app, the import stops and nothing half-imported is kept (imports were already
+  all-or-nothing). The dialog says so in one line.
+- New text has English and Simplified Chinese versions; the Chinese may want a native speaker's
+  polish.
+- New unit tests cover the request plumbing (requests survive the trip into a background job;
+  results reach a visible screen or become notifications; schedules reset or not; tile and shortcut
+  follow live mode), the tile's states, the CPU blur (strength, flat images, symmetric edges),
+  the panorama cap, the display choice, the live shader maths, the start screen, the
+  horizontal-scrolling rule, "Change now" sending one busy request, and imports that outlive the
+  album screen. New device tests (not run yet): the live vignette matches the static one pixel for
+  pixel within a few levels, is the same however the picture is drawn, the horizontal-scrolling
+  switch appears only for Home with Fill, and the Home / Lock cards report on/off.
 
 ---
 
