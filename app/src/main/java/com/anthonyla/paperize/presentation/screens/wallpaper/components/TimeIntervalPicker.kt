@@ -15,10 +15,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -72,6 +74,27 @@ fun TimeIntervalPicker(
     DisposableEffect(Unit) {
         onDispose { if (currentlyEditing) commit() }
     }
+
+    // Moving from one box to the next can briefly leave none focused; only a loss of focus that
+    // lasts past the next frame counts as leaving the boxes.
+    val focusedBoxes = remember { mutableStateListOf<Int>() }
+    val anyFocused = focusedBoxes.isNotEmpty()
+    LaunchedEffect(anyFocused) {
+        if (anyFocused) {
+            editing = true
+        } else if (editing) {
+            withFrameNanos { }
+            commit()
+            editing = false
+        }
+    }
+    fun Modifier.trackFocus(box: Int) = onFocusChanged { state ->
+        if (state.isFocused) {
+            if (box !in focusedBoxes) focusedBoxes += box
+        } else {
+            focusedBoxes -= box
+        }
+    }
     val focusManager = LocalFocusManager.current
     val nextField = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
     val lastField = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done)
@@ -102,17 +125,7 @@ fun TimeIntervalPicker(
             )
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    // Moving between the three boxes keeps the row focused; leaving it commits.
-                    .onFocusChanged { state ->
-                        if (state.hasFocus) {
-                            editing = true
-                        } else if (editing) {
-                            commit()
-                            editing = false
-                        }
-                    },
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -127,7 +140,7 @@ fun TimeIntervalPicker(
                     keyboardOptions = nextField,
                     keyboardActions = keyboardActions,
                     singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).trackFocus(1),
                     textStyle = MaterialTheme.typography.bodyLarge
                 )
 
@@ -142,7 +155,7 @@ fun TimeIntervalPicker(
                     keyboardOptions = nextField,
                     keyboardActions = keyboardActions,
                     singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).trackFocus(2),
                     textStyle = MaterialTheme.typography.bodyLarge
                 )
 
@@ -157,7 +170,7 @@ fun TimeIntervalPicker(
                     keyboardOptions = lastField,
                     keyboardActions = keyboardActions,
                     singleLine = true,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).trackFocus(3),
                     textStyle = MaterialTheme.typography.bodyLarge
                 )
             }
