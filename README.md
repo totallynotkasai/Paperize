@@ -101,37 +101,44 @@ The APK is in `app/build/outputs/apk/debug/`.
 
 ### Release build
 
-Release builds are shrunk with R8 and signed with your own key.
+```bash
+./gradlew assembleRelease
+```
 
-1. Create a key once, and keep it somewhere safe outside the repository. **Back it up:** an app
-   signed with it can only be updated by an APK signed with the same key. `keytool` comes with
-   Java and asks for the passwords itself.
+The APK is `app/build/outputs/apk/release/app-release.apk`, shrunk with R8. Like a debug build, it
+is signed with your computer's Android debug key (`~/.android/debug.keystore`, which Android Studio
+and the SDK create), so there is nothing to set up.
 
-   ```bash
-   keytool -genkeypair -v -keystore ~/keys/paperized-release.jks -alias paperized -keyalg RSA -keysize 4096 -validity 10000
-   ```
+Android only installs an update signed with the same key as the installed app. Building on another
+computer, or after reinstalling Windows, gives a different debug key, and the installed Paperized
+would then have to be uninstalled (with its albums) before the new build installs. **Back up
+`debug.keystore`** to avoid that, and copy it into place on a new computer.
 
-2. Create `keystore.properties` in the project root. Git ignores it and any `*.jks` file.
+Optionally, sign with a key of your own instead. Create it once with `keytool` (it comes with Java
+and asks for the passwords itself), keep it outside the repository and back it up:
 
-   ```properties
-   storeFile=C:/Users/you/keys/paperized-release.jks
-   storePassword=...
-   keyAlias=paperized
-   keyPassword=...
-   ```
+```bash
+keytool -genkeypair -v -keystore ~/keys/paperized-release.jks -alias paperized -keyalg RSA -keysize 4096 -validity 10000
+```
 
-3. Build:
+Then name it in `keystore.properties` in the project root, which git ignores (as it does any
+`*.jks` file):
 
-   ```bash
-   ./gradlew assembleRelease
-   ```
+```properties
+storeFile=C:/Users/you/keys/paperized-release.jks
+storePassword=...
+keyAlias=paperized
+keyPassword=...
+```
 
-   The signed APK is `app/build/outputs/apk/release/app-release.apk`. Without a key the build
-   still works and produces `app-release-unsigned.apk`, which Android won't install.
+Switching keys counts as a different signer, so the installed app has to be uninstalled once.
 
 CI builds use the `SIGNING_KEYSTORE_PATH`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS` and
-`SIGNING_KEY_PASSWORD` environment variables instead, which take precedence over the file. The
-GitHub workflow builds and signs releases only when the matching repository secrets are set.
+`SIGNING_KEY_PASSWORD` environment variables, which take precedence over the file. The GitHub
+workflow builds and signs releases only when the matching repository secrets are set.
+
+To try a release build on a phone without replacing the installed app, build it with
+`./gradlew assembleRelease -Ppaperized.tryRelease`. It installs over Paperized Debug instead.
 
 ### Tests and checks
 

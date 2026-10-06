@@ -5,7 +5,7 @@ The first release of this fork, based on Paperize 4.2.0.
 ### Name and release
 - The app is now called Paperized, and its live wallpaper "Paperized Live Wallpaper", in English and Simplified Chinese.
 - Release builds keep Paperize's app ID, so Paperized replaces Paperize; because it is signed with a different key, Paperize has to be uninstalled first and albums created again.
-- Release builds are signed with your own key, named in a git-ignored `keystore.properties` (or, on CI, in environment variables). Without a key they build unsigned instead of failing.
+- `gradlew assembleRelease` needs no set-up: like a debug build, a release is signed with the computer's Android debug key. A key of your own can be named in a git-ignored `keystore.properties` instead (or, on CI, in environment variables).
 - The live wallpaper's "Change on screen off" now waits while changing is paused, like every other automatic change.
 
 ### Library and albums

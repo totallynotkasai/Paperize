@@ -13,9 +13,9 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
-// Release signing key: CI passes it in environment variables; locally, a git-ignored
-// keystore.properties in the project root names it (see the README). Without either, release
-// builds come out unsigned.
+// Release signing: like a debug build, a release is signed with this computer's debug key unless a
+// key of your own is set up. CI passes one in environment variables; locally, an optional
+// git-ignored keystore.properties in the project root names it (see the README).
 val keystoreProperties = Properties().apply {
     providers.fileContents(rootProject.layout.projectDirectory.file("keystore.properties"))
         .asText.orNull?.let { load(it.reader()) }
@@ -75,6 +75,7 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
+                ?: signingConfigs.getByName("debug")
             // `-Ppaperized.tryRelease` builds the shrunk release under the debug app's ID and key,
             // so it can be tried on a phone over Paperized Debug without touching the real app.
             if (providers.gradleProperty("paperized.tryRelease").isPresent) {

@@ -1011,7 +1011,7 @@ Nova and the HyperOS launcher.
 |----|------|------|--------|
 | 7.1 | Tests for the change service, scheduled worker, live engine logic, widgets and the v5 migration | M | ☑ |
 | 7.2 | README (formats, features) and CHANGELOG | S | ☑ |
-| 7.3 | Personal release build signed with your own key. It can't update the installed 4.1.1 (different signature), so switching means uninstalling 4.1.1 and re-creating albums, or keeping both side by side. | S | ◐ (you) |
+| 7.3 | Personal release build signed with your own key. It can't update the installed 4.1.1 (different signature), so switching means uninstalling 4.1.1 and re-creating albums, or keeping both side by side. | S | ☑ |
 | 7.4 | Optional, only if you want: offer the Phase 1–3 bug fixes back to upstream as pull requests | S | skipped (your choice) |
 
 Phases 4–6 can be reordered to taste once Phase 2 is done; 4.1 needs 2.1, 5.2 and 5.3 need 1.0.
@@ -1076,10 +1076,14 @@ Phases 4–6 can be reordered to taste once Phase 2 is done; 4.1 needs 2.1, 5.2 
 - 7.3, what is done:
   - Version **4.2.0-fork.1** (version code 58): upstream's 4.2.0 plus the fork's changes, so it can't be
     mistaken for an upstream release. Change it in `app/build.gradle.kts` if you prefer another scheme.
-  - The release is signed with the key named in a git-ignored `keystore.properties` in the project root
-    (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`); CI's environment variables still take
-    precedence. Without a key, `assembleRelease` now builds an unsigned APK instead of failing. Git
-    ignores `keystore.properties`, `*.jks` and `*.keystore`.
+  - **Deviation (your choice, 2026-10-07): the release is signed with this PC's Android debug key**
+    (`%USERPROFILE%\.android\debug.keystore`), as Android Studio does for your other apps, instead of a
+    key made for Paperized. So `gradlew assembleRelease` needs no set-up. The catch: Android installs an
+    update only if it is signed with the same key, so a build from another PC (or after reinstalling
+    Windows) would need Paperized uninstalled first, losing its albums. **Back up `debug.keystore`.**
+  - A key of your own is still possible: a git-ignored `keystore.properties` in the project root names
+    it (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`), and CI's environment variables take
+    precedence over that file. Git ignores `keystore.properties`, `*.jks` and `*.keystore`.
   - Checked with a throwaway key made in a temporary folder (not your key; deleted afterwards): the
     release APK was signed with it (`apksigner verify`), and `keystore.properties` stayed out of git. The
     APK is `com.anthonyla.paperize`, version 4.2.0-fork.1, labelled "Paperized", with no network
@@ -1087,11 +1091,12 @@ Phases 4–6 can be reordered to taste once Phase 2 is done; 4.1 needs 2.1, 5.2 
   - **Beyond the plan:** `-Ppaperized.tryRelease` builds the shrunk release under the debug app's ID and
     key, so it can be tried on the phone over Paperized Debug before you uninstall 4.1.1. The phone
     check below found the shrunk build works; no new R8 keep rules were needed.
-- 7.3, **what is left for you:** create your key and `keystore.properties` (README, "Release build"),
-  build with `gradlew assembleRelease`, then, when you are ready to switch, uninstall 4.1.1 (its albums
-  and settings go with it) and install `app/build/outputs/apk/release/app-release.apk`. Back the key up:
-  only APKs signed with it can update the installed app. I didn't create the key, because its passwords
-  should never pass through me.
+- 7.3, **installed (2026-10-07):** you uninstalled 4.1.1 yourself, and I installed the release built
+  with `gradlew assembleRelease` (debug key, R8 on, not debuggable): `com.anthonyla.paperize`, version
+  4.2.0-fork.1, "Paperized". It opened in 130 ms on its first-run "Choose Wallpaper Mode" screen with
+  nothing in the crash log; the set-up and your albums are yours to do. Paperized Debug stays installed
+  next to it, and from now on only `.debug` builds (or `-Ppaperized.tryRelease`) go on the phone for
+  testing.
 - 7.4: skipped, as you chose. The Phase 1–3 fixes stack on the v5 migration, so offering them upstream
   would mean rebuilding them on upstream's code as separate changes.
 - New text: none beyond the rename; the Chinese strings only changed the app's name.
