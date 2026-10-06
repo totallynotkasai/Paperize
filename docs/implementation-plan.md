@@ -373,9 +373,10 @@ on and off; an import carries on after leaving the album.
 **Phase 3 notes and deviations:**
 - Work is on branch `phase-3/ui-polish`, branched from `phase-2/scheduling-settings` and kept local
   like Phases 1 and 2. CI was run locally on Windows with the workflow's commands (`gradlew clean
-  test`, then `gradlew :app:lintDebug`) plus a debug build: 182/182 unit tests pass (142 before, 40
-  new), lint 0 errors and the same 18 warnings as the baseline (Phase 3 code briefly added a 19th,
-  `LocalContextResourcesRead`, which is fixed), debug build successful.
+  test`, then `gradlew :app:lintDebug`) plus a debug build, last on the final code including the
+  phone-check fixes: 185/185 unit tests pass (142 before, 43 new), lint 0 errors and the same 18
+  warnings as the baseline (Phase 3 code briefly added a 19th, `LocalContextResourcesRead`, which
+  is fixed), debug build successful.
 - 3.1: the viewer now always shows the image on black with white controls, in either theme (the
   old title and back arrow used a theme colour that is dark in dark theme). Beyond the plan: a soft
   dark shading behind the top and bottom bars keeps them readable when a zoomed image runs under
@@ -387,15 +388,20 @@ on and off; an import carries on after leaving the album.
 - 3.3: the descriptions stay visible whatever the switch says. **Beyond the plan:** "Double-tap to
   change" and "Change on screen off" had the same hide-when-on logic and are fixed too. The
   horizontal-scrolling switch moved into the Scaling card, under the Fill / Fit / Stretch / None
-  buttons, and appears only when Home is on with Fill. Its saved value is kept while it is hidden
-  (it only ever applied to Home with Fill).
+  buttons, as a plain row (the whole row toggles), and appears only when Home is on with Fill. Its
+  saved value is kept while it is hidden (it only ever applied to Home with Fill).
 - 3.4: "Change wallpaper now" now sends one request covering every rotating screen (before, with
   separate schedules, it sent one per screen; the effect is the same and each screen's countdown
   still restarts). While it runs the button reads "Changing wallpaper…" and is disabled, then a
   snackbar says "Wallpaper changed" or why not. The viewer's "Set wallpaper" works the same way
-  ("Setting wallpaper…", then "Wallpaper set"). A problem with a request made from the visible
-  screen is shown there instead of as a notification; if you have left the screen, it becomes a
-  notification as before. **Beyond the plan:** in live mode the snackbar says nothing changed when
+  ("Setting wallpaper…", then "Wallpaper set"). The snackbar host belongs to the whole app, so the
+  result appears on whichever screen is open. A problem with a request made in the app is shown
+  there while Paperize is in the foreground; if you have left the app, it becomes a notification
+  as before. Results are kept until a screen has shown them in full (and dropped if not shown
+  within 10 seconds), because a new wallpaper often makes Android re-create the app's screen:
+  HyperOS rebuilds the system colours from the wallpaper, and that restarts every app's activity.
+  The phone check found this (the first "Wallpaper changed" vanished); see below. **Beyond the
+  plan:** in live mode the snackbar says nothing changed when
   Paperize isn't the live wallpaper. Notifications now use two channels: "Wallpaper changes" (the
   existing silent channel, renamed from "Paperize") and a new "Problems" channel at default
   importance, so it makes a sound unless you change it in Android's settings. Android keeps a
@@ -464,9 +470,55 @@ on and off; an import carries on after leaving the album.
   follow live mode), the tile's states, the CPU blur (strength, flat images, symmetric edges),
   the panorama cap, the display choice, the live shader maths, the start screen, the
   horizontal-scrolling rule, "Change now" sending one busy request, and imports that outlive the
-  album screen. New device tests (not run yet): the live vignette matches the static one pixel for
-  pixel within a few levels, is the same however the picture is drawn, the horizontal-scrolling
-  switch appears only for Home with Fill, and the Home / Lock cards report on/off.
+  album screen, and results that wait for a re-created screen. New device tests: the live vignette
+  matches the static one within a few colour levels, is the same however the picture is drawn, the
+  horizontal-scrolling switch appears only for Home with Fill, and the Home / Lock cards report
+  on/off.
+- Device tests (installed with adb and run with `am instrument`): 44 passed, 0 failed: 28 in the
+  repository, migration, document-access and display-name classes, 7 live-shader tests (2 new) on
+  the phone's GPU, and 9 UI tests (2 new), re-run on the final build. Not run, as before:
+  `WallpaperUtilInstrumentedTest`, and the preferences and scheduler tests. **HyperOS note:** after
+  reinstalling, the UI tests stalled behind a HyperOS "allow Paperize Debug test to open Paperize
+  Debug?" prompt (`com.miui.wakepath`) that nobody tapped. You tapped Allow on the re-run and all 9
+  passed.
+- Phone check (2026-10-06, Paperize Debug in static mode, album "Phase2"; Lock was turned off for
+  the wallpaper steps so only the home screen changed, as you chose). Changes were counted with the
+  wallpaper IDs in `dumpsys wallpaper`. Passed:
+  - Theme: Dark switched the app at once; back to System it followed the phone's light mode (3.2).
+  - The Library card read "4 wallpapers"; the folder tile showed its cover, "PaperizePhase2", "4
+    wallpapers" and a folder badge, and is one screen-reader item, "Folder PaperizePhase2, 4
+    wallpapers" (3.6).
+  - In dark theme the viewer showed a white title and back arrow on black with light status-bar
+    icons (3.1).
+  - Horizontal scrolling sits in the Scaling card with Home on and Fill, and the descriptions
+    show. The switches were not turned on to check the old hide-when-on bug, because turning
+    Shuffle on restarts the rotation; that case is a code fix with no condition left (3.3).
+  - "Change wallpaper now" changed Home once (Lock untouched) and showed "Wallpaper changed";
+    "Set wallpaper" → Home Screen in the viewer changed Home once and showed "Wallpaper set" (3.4).
+  - The "Problems" channel has default importance (sound) and the existing channel is now
+    "Wallpaper changes" at low importance (3.4).
+  - The tile, once you added it, showed the new single-colour icon; SystemUI reported "Next
+    wallpaper", "Paused", inactive. A tap changed Home once, also with Paperize Debug in the
+    background (3.5).
+  - Turning Lock off and on kept its album and changed nothing (2.1 still holds).
+  - 4.1.1 was untouched (same version and install time).
+- **Found during the phone check and fixed** (in the commit after the Phase 3 commit):
+  - The first "Wallpaper changed" vanished within a second, and one result never showed. The new
+    wallpaper made HyperOS regenerate its colour overlays, which re-created Paperize's activity
+    and lost the snackbar. Fixed as described under 3.4; re-tested on the phone, the snackbar now
+    stays its full time across the re-creation.
+  - Moving the horizontal-scrolling switch into the Scaling card nested one card in another, so
+    the title wrapped and the description was cut off. It is now a plain full-width row.
+- Not checked on the phone: the live vignette by eye (Paperize Debug would have to switch to live
+  mode, which resets its albums; the device tests ran the shaders on the phone's GPU instead),
+  imports carrying on after leaving an album (needs the file picker; unit tests cover it), the
+  splash screen (no visible gap either way), a problem notification's sound (the channel's
+  importance was checked instead), and the background-job fallback: on HyperOS a tile tap may
+  start the service even from the background, so the fallback wasn't needed; unit tests cover it.
+- Left on the phone: Paperize Debug in static mode, changing paused, Home and Lock on with album
+  Phase2, theme System. Your home screen shows a Paperize Debug test image until 4.1.1's next
+  change; the lock screen was not touched. The "Next wallpaper" tile is still in Quick Settings;
+  remove it in the panel's Edit view if you don't want it.
 
 ---
 
