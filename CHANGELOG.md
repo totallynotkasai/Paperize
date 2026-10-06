@@ -61,6 +61,16 @@
 - Auto-pan draws frames only while the wallpaper is visible, at most about 30 a second and far fewer for slow or short pans. On wide images it takes the place of parallax.
 - Very long panoramas are decoded at a capped size in live mode, so they no longer run out of memory and get skipped.
 
+### Album settings, favourites and exclusions
+- Albums have a menu (⋮) with "Album settings" and "Delete album". Album settings holds the album's name, what its favourites do, and its own effects; every change is saved straight away.
+- Albums can be renamed. Names stay unique regardless of upper and lower case, and a renamed album keeps its place in the Library. Creating an album uses the same rule.
+- Images can be marked as favourites or excluded from rotation, including images inside folders: long-press to select (now also in folder views), then use the heart or the exclusion toggle. Selecting a folder marks all of its images. Marks survive folder refreshes.
+- Excluded images are dimmed, marked and never come up; one excluded while on screen stays until the next change. If every image in an album is excluded, changing says so instead of reporting the album as unreadable.
+- "Favourites" and "Excluded" filters above the grid list every matching image in the album, folders included. Folder tiles say how many of their images are excluded.
+- Each album chooses what its favourites do: Marker only (the default), Show more often (twice as often while Shuffle is on), or Favourites only (falls back to every image when there are none). Marks and modes apply from the next change, without starting the round again; changing the mode starts a new round.
+- "Custom effects for this album" gives an album its own brightness, blur, vignette and grey filter, used on every screen it is shown on, static or live. The Wallpaper tab says when an album's own effects replace its settings, and editing those settings no longer re-sets that album's wallpaper.
+- Home and Lock now have separate scaling choices when both are turned on.
+
 ## v4.2.0
 
 ### Library and albums

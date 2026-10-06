@@ -689,11 +689,146 @@ Nova and the HyperOS launcher.
 
 | ID | Item | Size | Status |
 |----|------|------|--------|
-| 5.1 | **Rename albums** (album menu; unique-name check) | S | ☐ |
-| 5.2 | **Exclude and favourite images**, including inside folders. Multi-select in album and folder views. Excluded images are dimmed and never rotate. Both survive folder refreshes. A per-album **Favourites** setting chooses Marker only / Show more often / Favourites only (decision B). | M | ☐ |
-| 5.3 | **Effects per album.** "Custom effects for this album" overrides both Home and Lock effects wherever that album is shown, static and live (decision E). | M | ☐ |
-| 5.5 | **Album settings sheet** (album menu) grouping Rename (5.1), Favourites mode (5.2) and Custom effects (5.3). | S | ☐ |
-| 5.4 | **Separate scaling for Home and Lock** in the UI (the settings already support it) | S | ☐ |
+| 5.1 | **Rename albums** (album menu; unique-name check) | S | ☑ |
+| 5.2 | **Exclude and favourite images**, including inside folders. Multi-select in album and folder views. Excluded images are dimmed and never rotate. Both survive folder refreshes. A per-album **Favourites** setting chooses Marker only / Show more often / Favourites only (decision B). | M | ☑ |
+| 5.3 | **Effects per album.** "Custom effects for this album" overrides both Home and Lock effects wherever that album is shown, static and live (decision E). | M | ☑ |
+| 5.5 | **Album settings sheet** (album menu) grouping Rename (5.1), Favourites mode (5.2) and Custom effects (5.3). | S | ☑ |
+| 5.4 | **Separate scaling for Home and Lock** in the UI (the settings already support it) | S | ☑ |
+
+**Phase 5 notes and deviations:**
+- Work is on branch `phase-5/library-features`, branched from `phase-4/widgets-autopan` and kept local
+  like Phases 1–4. CI was run locally on Windows with the workflow's commands (`gradlew clean test`,
+  then `gradlew :app:lintDebug`) plus a debug build, last on the final code including the
+  phone-check fixes: 237/237 unit tests pass (213 before, 24 new), lint 0 errors and the same 18
+  warnings as the baseline (a helper briefly added a 19th, `ComposableNaming`, which is fixed),
+  debug build successful. The only Kotlin compiler warnings are the two deprecated `Slider` overloads
+  already noted in Phases 2 and 4. **No database change:** every column Phase 5 needs came with the v5
+  migration (1.0), and the queue table already allowed an image to be queued twice.
+- 5.5, the album menu: **deviation in layout.** The album's top bar keeps Reorder and Sort and gains
+  an album menu (⋮) with "Album settings" and "Delete album"; Delete moved off the bar into that
+  menu, so the bar keeps three actions and long album names still fit. The settings sheet has three
+  parts: the album's name (tap to rename), "Favourites" (how many there are, the three modes, and a
+  hint when the chosen mode can't do anything yet: Show more often with Shuffle off, or Favourites
+  only with no usable favourite), and "Custom effects for this album". Every change is saved at once.
+- 5.1: names are compared ignoring case and surrounding spaces, so "cats" can't sit next to "Cats";
+  an album may change the case of its own name. The rename dialog says "Album with this name already
+  exists" and stays open. A renamed album keeps its place in the Library (renaming doesn't count as
+  a change to its contents, which is what the Library sorts by). **Beyond the plan:** creating an
+  album now uses the same rule; before, the Library dialog checked ignoring case but the code behind
+  it didn't. The old exact-match lookup is gone.
+- 5.2, marking: long-press starts a selection in the album view (as before) and now also in folder
+  views. The selection bar has a heart and an exclusion toggle; each is filled when every selected
+  image already has that mark, so a tap takes it away again, and outlined otherwise. Selecting a
+  folder tile marks all of its images. A snackbar says how many images changed ("3 images added to
+  favourites", "2 images are back in rotation"). Folder views have no Delete: a folder's images come
+  and go with the folder (a refresh would bring them back), so excluding is the way to keep one out.
+  In the album view, Delete hides while the selection includes images from inside folders (possible
+  through the filters).
+- 5.2, look: favourites carry a small heart and excluded images a "no entry" mark in the tile's lower
+  corner, and excluded images are dimmed. Screen readers hear one label, e.g. "sea.jpg, favourite,
+  excluded from rotation". Folder tiles say "5 wallpapers · 1 excluded" and dim when every image is
+  excluded. **Beyond the plan:** the reorder screen also dims excluded images and labels them, since
+  they keep their place in the order.
+- 5.2, filters: decision B's "filter in the album view" is a row of chips above the grid,
+  "Favourites (n)" and **(beyond the plan)** "Excluded (n)", shown once the album or folder has such
+  images. At most one is on. In the album view a filter lists every matching image, from folders too,
+  as a flat grid in the chosen sort order, so all favourites or all excluded images can be found and
+  changed in one place. The chosen filter survives rotation and the app being closed in the
+  background; changing it clears the selection.
+- 5.2, rotation: the rule for which images rotate lives in one place in the database queries.
+  Excluded images, like unreadable ones (1.4), stay queued but are passed over, so including one
+  again resumes its place; one excluded while on screen stays there until the next change. If every
+  image is excluded, changing reports "Every image in this album is excluded from rotation" and keeps
+  the album selected (it used to say the images couldn't be opened).
+  - **Favourites only** rotates only favourites that can rotate (not excluded, still readable); with
+    none, every image rotates, so the album never runs dry.
+  - **Show more often** gives each favourite two turns per shuffled round and every other image one,
+    i.e. "twice as often". A round is two shuffled halves that each hold every favourite and half of
+    the others, so a favourite's two turns are spread apart, and the same image never comes up twice
+    in a row. In order mode (Shuffle off) favourites aren't weighted, as decision B says "weighted in
+    shuffle"; the sheet says so while Shuffle is off.
+  - To allow two turns, an image's queue entries are now taken one at a time: showing an image uses
+    up one turn, putting back an image that couldn't be shown keeps its other turn, and recording an
+    applied image removes only its first queued turn.
+  - Marks apply from the next change without restarting the round: a new favourite gains a turn in
+    the rounds in progress (Show more often) or joins them (Favourites only), a former favourite loses
+    its second turn, and an image included again joins the round at its place (2.6's merge). When
+    Favourites only takes effect (the first usable favourite) or lapses (the last one goes), and when
+    the album's mode changes, every screen starts a new round, like reordering or switching Shuffle.
+  - Marks survive folder refreshes, which add only files not already in the folder and remove only
+    files the scan no longer finds; covered by a device test.
+- 5.3: **deviation in scope:** an album's own effects are the visual ones (brightness, blur, vignette,
+  grey filter). The live wallpaper's interactive settings (double-tap, change on screen off,
+  parallax, auto-pan) and adaptive brightness stay with the screen, because they describe how the
+  wallpaper behaves rather than how an album looks. (Phase 4 noted auto-pan *could* be carried per
+  album; it isn't.) Turning custom effects on starts from the effects of the screen showing the
+  album, so nothing changes until an effect is changed; turning them off goes back to the screen's
+  effects. Static wallpapers use them for every way an image is shown (scheduled and manual changes,
+  re-renders, the viewer's "Set wallpaper"); after an edit, the screens showing the album re-render
+  (slider levels 1.5 s after the last edit, or at once when the sheet closes or the app goes to the
+  background). The live wallpaper follows the album's effects as they change, without reloading.
+  **Beyond the plan:** the Wallpaper tab says "“Phase5” has custom effects, which it uses instead of
+  these" under its effects title, and editing those effects no longer sets the wallpaper of a screen
+  whose album has its own (the result would look the same, and on HyperOS every new wallpaper
+  re-creates the app's screen). Library summaries learn whether an album has its own effects from the
+  same query, with no extra column.
+- 5.4: in static mode with both screens on, the Scaling card shows a "Home" row and a "Lock" row, each
+  with Fill / Fit / Stretch / None; with one screen on, its own row. Before, the single row set both
+  screens. Horizontal scrolling still follows Home's scaling. Live mode is unchanged.
+- New text has English and Simplified Chinese versions; the Chinese may want a native speaker's
+  polish. Two strings that nothing used any more were removed.
+- New unit tests cover the weighted rounds and the extra-turn changes, marking (only changed images
+  adjust the rounds, Favourites only taking effect or lapsing starts new rounds, included images
+  rejoin, failures keeping the rounds in line don't fail the mark), keeping a favourite's second turn
+  when a change completes, the all-excluded message, album effects replacing only visual effects,
+  the album screen (marking folders' images, filters, rename outcomes, which screens re-render and
+  when, the live wallpaper left to follow by itself, where custom effects start), and skipping
+  re-renders for albums with their own effects. New device tests: excluded images, Favourites only
+  and its fallback, Show more often's two turns taken one at a time, extra turns added and removed,
+  marks surviving a refresh, renaming, album effects and the Library flag (7, on the phone's
+  database), and the per-screen scaling rows, the settings sheet, tile labels and the filter chips
+  (4 UI tests).
+- Device tests (installed with adb and run with `am instrument`): 56 passed, 0 failed, re-run on the
+  final build: 43 in the repository, migration, document-access, display-name and live-shader classes
+  (7 new) and 13 UI tests (4 new). Not run, as before: `WallpaperUtilInstrumentedTest`, and the
+  preferences and scheduler tests. The first run's force-stop removed Paperize Debug's live wallpaper
+  from the home screen (the system fell back to its default image); after the final run Android
+  re-bound it instead, so it stayed.
+- Phone check (2026-10-06, Paperize Debug in live mode with its Phase 4 album, the live wallpaper on
+  the home screen only, as you chose). The three Phase 2 PNGs were copied into
+  `Pictures/PaperizePhase4` for it. Passed:
+  - The folder's Refresh found the three PNGs. Long-press → heart marked the tall image ("1 image
+    added to favourites", heart on its tile, label "…, favourite"); the panorama was excluded (dimmed,
+    marked). The folder tile read "5 wallpapers · 1 excluded". The album's Favourites filter listed the
+    tall image from inside the folder; tapping it again brought the folder tile back.
+  - The album menu showed "Album settings" and "Delete album". Renaming to "cats" while an album "Cats"
+    existed said the name was taken and kept the dialog open; renaming to "Phase5" worked, and the
+    album kept its place in the Library. "Delete album" from the menu deleted the test album "Cats".
+  - Favourites only: three "Change wallpaper now" taps each loaded the tall favourite (renderer log:
+    1200 × 5200 each time); the excluded panorama, which was on screen before, didn't come back.
+    Marker only then started a new round in album order: the tall image and the three PNGs, never the
+    panorama.
+  - Custom effects on changed nothing; the album's grey filter at 82% turned the live wallpaper grey
+    at once (renderer log "grayscale=true/82", screenshot), and the Wallpaper tab showed the "has custom
+    effects" note. Turning custom effects off brought the colours back and removed the note.
+  - 4.1.1 was untouched (same version and install time).
+- **Found during the phone check and fixed** (before the Phase 5 commit):
+  - The filter chips first sat at the top of the grid; when the first mark was made, the grid kept the
+    images where they were, so the new chips appeared above the visible area. They are now a fixed row
+    between the top bar and the grid (album and folder views), and a filter with nothing to show is
+    left out.
+  - The settings sheet's rows drew their own darker background, which looked like stray blocks on the
+    sheet; they now sit on the sheet.
+- Not checked on the phone: Show more often's weighting (it needs many shuffled changes; unit and
+  device tests cover it), album effects and separate scaling on static wallpapers (switching Paperize
+  Debug to static mode resets its albums; unit and device tests cover them), and the Chinese text.
+- Left on the phone: Paperize Debug in live mode with album "Phase5" (the Phase 4 album, renamed:
+  folder `PaperizePhase4` with five images, the tall one a favourite and the panorama excluded),
+  Marker only, custom effects off, changing paused; its live wallpaper on your home screen. The lock
+  screen still shows HyperOS's own picture wallpaper (its wallpaper ID moved from 2389 to 2395 during
+  the first device-test run, without anything being set there). The test folders
+  `Pictures/PaperizePhase2` and `Pictures/PaperizePhase4` (now with copies of the three PNGs) are
+  still on the phone, as are the three Shuffle widgets and the Quick Settings tile.
 
 ---
 
