@@ -1,3 +1,10 @@
+## Unreleased (fork)
+
+### Development setup
+- Debug builds install as "Paperize Debug" (`com.anthonyla.paperize.debug`) next to the release app, with their own live wallpaper name and a working "Change wallpaper" shortcut.
+- Room database schemas are tracked in git so migrations can be tested against them.
+- CI runs tests and lint on every pull request and push to `master`, and skips the signed build and release when signing secrets are not configured.
+
 ## v4.2.0
 
 ### Library and albums
