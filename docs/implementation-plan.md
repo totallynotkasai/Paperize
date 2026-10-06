@@ -1026,6 +1026,10 @@ Phases 4–6 can be reordered to taste once Phase 2 is done; 4.1 needs 2.1, 5.2 
   already noted in Phases 2 and 4.
 - Your choices (2026-10-07): the release **replaces 4.1.1** (same app ID), the app is called
   **Paperized**, and 7.4 is skipped for now.
+- 2026-10-07, as you asked: all seven phase branches (`phase-1/critical-fixes` to
+  `phase-7/hardening-release`) are pushed to the fork, with **no pull requests**. Branch pushes don't run
+  the workflows (they run on `master` and on pull requests), so the local CI runs above are the record.
+  The branches stack, so they need merging into `master` in order.
 - 7.1, how the code was made testable: the decisions were pulled out of the Android classes into plain
   code, which the classes now call. No behaviour changed apart from the fix below.
   - Change service: a start's handling (run in the foreground, hand over to a background job, end a
