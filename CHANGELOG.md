@@ -14,7 +14,7 @@ The first release of this fork, based on Paperize 4.2.0.
 - SVG images now work as static and live wallpapers. TIFF is no longer listed as supported, because Android can't decode it; imports skip files in unsupported formats and say how many were skipped.
 - Removing images, folders or albums gives back Android's file permissions that nothing else uses. Imports warn as the app nears Android's limit of 512 kept permissions and stop before it, suggesting a folder instead.
 - Images Paperized can no longer read are marked in the album, with a banner to grant access again or remove them. They are skipped in rotation, and an album whose images all lost access stays selected instead of being treated as empty.
-- The database moves to version 5, adding everything later planned features need in one migration.
+- The database moves to version 5, adding everything the new features need in one migration.
 
 ### Wallpaper reliability
 - The live wallpaper shows the same image again after a reboot, app update or re-applying it, instead of moving to the next one. The current live image appears in the "Current wallpapers" card.
