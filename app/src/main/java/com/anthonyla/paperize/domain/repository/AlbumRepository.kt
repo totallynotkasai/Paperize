@@ -76,7 +76,7 @@ interface AlbumRepository {
     /** A new mode starts a new rotation round for every screen. Returns false if it was already set. */
     suspend fun setFavoritesMode(albumId: String, mode: FavoritesMode): Result<Boolean>
 
-    /** The album's own effects, or null when the screen's effects apply (plan 5.3). */
+    /** The album's own effects, or null when the screen's effects apply. */
     suspend fun getAlbumEffects(albumId: String): WallpaperEffects?
 
     fun getAlbumEffectsFlow(albumId: String): Flow<WallpaperEffects?>

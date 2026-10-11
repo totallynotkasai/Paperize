@@ -75,9 +75,9 @@ import com.anthonyla.paperize.service.schedule.listenerChannelSettingsIntent
 private enum class NightTime { NIGHT_START, DAY_START }
 
 /**
- * Scheduling options beyond the interval or set times: screen-off and unlock changes (static
- * mode, plan 6.2), night albums (plan 6.4) and the battery conditions (plan 6.1). Shares the
- * Wallpaper tab's view model, so every edit goes through the same saving and scheduling.
+ * Scheduling options beyond the interval or set times: screen-off and unlock changes (static mode),
+ * night albums and the battery conditions. Shares the Wallpaper tab's view model, so every edit
+ * goes through the same saving and scheduling.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

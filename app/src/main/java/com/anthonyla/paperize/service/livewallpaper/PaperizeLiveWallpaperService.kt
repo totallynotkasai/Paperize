@@ -213,7 +213,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                     return@withContext EmptyImageLoader
                 }
                 val settings = settingsRepository.getScheduleSettings()
-                // At night this is the night album, if there is one (plan 6.4).
+                // At night this is the night album, if there is one.
                 val albumId = settings.albumFor(ScreenType.LIVE) ?: run {
                     Log.w(TAG, "No live album ID set")
                     return@withContext EmptyImageLoader
@@ -302,7 +302,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                 ) { settings, mode ->
                     Pair(settings, mode)
                 }.flatMapLatest { (settings, mode) ->
-                    // The live album's own effects replace the live effects (plan 5.3).
+                    // The live album's own effects replace the live effects.
                     val albumEffects = settings.albumFor(ScreenType.LIVE)?.let { albumRepository.getAlbumEffectsFlow(it) } ?: flowOf(null)
                     albumEffects.map { Triple(settings, mode, it) }
                 }.catch { e ->
@@ -457,7 +457,7 @@ class PaperizeLiveWallpaperService : GLWallpaperService() {
                     delay(intervalMillis)
                     val block = changeConditions.automaticChangeBlock(tracker.settings)
                     if (block != null) {
-                        // Plan 6.1: this turn is skipped; the next one checks again.
+                        // A battery condition holds this turn back; the next one checks again.
                         Log.d(TAG, "Visible live interval elapsed; not changing ($block)")
                         continue
                     }

@@ -26,7 +26,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 
-/** What a tap on a Shuffle widget does, and when placed widgets are redrawn (plan 4.1). */
+/** What a tap on a Shuffle widget does, and when placed widgets are redrawn. */
 class ShuffleWidgetsTest {
     private val context = mockk<Context>(relaxed = true)
     private val settingsFlow = MutableStateFlow(ScheduleSettings())

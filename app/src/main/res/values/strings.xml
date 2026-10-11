@@ -227,7 +227,7 @@
   <string name="sort_save_failed">Could not save the order. Please try again.</string>
   <string name="reset_failed">Could not finish resetting data. Please try again.</string>
 
-  <!-- Rotation order (fork plan 1.1) -->
+  <!-- Rotation order -->
   <string name="reorder">Reorder</string>
   <string name="rotation_order_title">Rotation order</string>
   <string name="reorder_hint">Long-press and drag to change the order wallpapers change in when shuffle is off. Images added on their own come first, then each folder in turn.</string>
@@ -235,7 +235,7 @@
   <string name="sort_rotation_order_description">The order wallpapers change in when shuffle is off</string>
   <string name="content_desc_current_live_wallpaper">Current live wallpaper</string>
 
-  <!-- Formats and file access (fork plan 1.3, 1.4) -->
+  <!-- Formats and file access -->
   <string name="import_none_supported">None of the selected files are in a format Paperized can show.</string>
   <plurals name="import_skipped_unsupported">
     <item quantity="one">%d file was skipped because Paperized can\'t show its format.</item>
@@ -276,7 +276,7 @@
   <string name="app_info">App info</string>
   <string name="effects_need_a_screen">Turn on Home or Lock above to change the effects.</string>
 
-  <!-- UI polish (fork plan 3.2–3.6, 3.13) -->
+  <!-- UI polish -->
   <string name="theme">Theme</string>
   <string name="theme_description">Follow your phone\'s setting, or always use light or dark.</string>
   <string name="theme_system">System</string>
@@ -301,7 +301,7 @@
   <string name="import_hide">Hide</string>
   <string name="import_continues_hint">You can leave this screen. Adding carries on while Paperized is open.</string>
 
-  <!-- Widgets (fork plan 4.1) -->
+  <!-- Widgets -->
   <string name="widget_shuffle_home">Shuffle Home</string>
   <string name="widget_shuffle_lock">Shuffle Lock</string>
   <string name="widget_shuffle_both">Shuffle Both</string>
@@ -316,7 +316,7 @@
   <string name="widget_live_no_album">Pick a live album in Paperized first.</string>
   <string name="widget_changing_lock">Changing the lock screen wallpaper…</string>
 
-  <!-- Live auto-pan (fork plan 4.2) -->
+  <!-- Live auto-pan -->
   <string name="auto_pan">Auto-Pan Cut-Off Images</string>
   <string name="auto_pan_description">Slowly pans across the parts of an image that Fill or None cut off. On wide images it replaces parallax.</string>
   <string name="auto_pan_needs_fill_or_none">Works with Fill or None scaling.</string>
@@ -330,7 +330,7 @@
     <item quantity="other">%d minutes per sweep</item>
   </plurals>
 
-  <!-- Library features (fork plan 5.1–5.5) -->
+  <!-- Library features -->
   <string name="album_menu">Album options</string>
   <string name="album_settings">Album settings</string>
   <string name="delete_album_menu">Delete album</string>
@@ -389,7 +389,7 @@
   </plurals>
   <string name="count_with_excluded">%1$s · %2$s</string>
   <string name="error_all_wallpapers_excluded">Every image in this album is excluded from rotation. Include some again in Paperized to keep changing.</string>
-  <!-- Phase 6: smarter scheduling -->
+  <!-- Smarter scheduling -->
   <string name="notification_channel_listener">Screen-off and unlock changes</string>
   <string name="notification_channel_listener_description">Android needs this while Paperized waits for the screen to turn off or the phone to unlock. You can turn it off; the changes keep working.</string>
   <string name="listener_notification_title">Ready to change your wallpaper</string>

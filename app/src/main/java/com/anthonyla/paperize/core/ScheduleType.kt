@@ -1,6 +1,6 @@
 package com.anthonyla.paperize.core
 
-/** How automatic changes are timed (plan 6.4). */
+/** How automatic changes are timed. */
 enum class ScheduleType {
     /** Every N minutes, from a background job (or the visible live engine for short intervals). */
     INTERVAL,
@@ -14,7 +14,7 @@ enum class ScheduleType {
     }
 }
 
-/** What switches between the day and night albums (plan 6.4, decision C). */
+/** What switches between the day and night albums. */
 enum class NightTrigger {
     /** Night starts and ends at two clock times. */
     CLOCK,

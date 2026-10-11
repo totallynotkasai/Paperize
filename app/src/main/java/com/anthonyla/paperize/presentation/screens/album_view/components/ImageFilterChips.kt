@@ -23,9 +23,9 @@ import com.anthonyla.paperize.presentation.screens.album_view.ImageFilter
 import com.anthonyla.paperize.presentation.theme.AppSpacing
 
 /**
- * "Favourites" and "Excluded" filters for an album or folder (plan 5.2), in a fixed row above the
- * grid. At most one is on; tapping it again shows everything. A filter with nothing to show is
- * left out unless it is on; with neither, there is no row.
+ * "Favourites" and "Excluded" filters for an album or folder, in a fixed row above the grid. At
+ * most one is on; tapping it again shows everything. A filter with nothing to show is left out
+ * unless it is on; with neither, there is no row.
  */
 @Composable
 fun ImageFilterChips(

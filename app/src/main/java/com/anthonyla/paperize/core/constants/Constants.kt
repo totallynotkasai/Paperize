@@ -65,7 +65,7 @@ object Constants {
     /** Opening the app rescans folders at most this often; the daily 3 AM refresh always runs. */
     const val FOREGROUND_REFRESH_MIN_INTERVAL_MS = 4 * 60 * 60 * 1000L
 
-    // Smarter scheduling (fork plan, Phase 6)
+    // Smarter scheduling
     /** Screen-off and unlock changes: the minimum-gap choices, in minutes (0 = every time). */
     val TRIGGER_GAP_STEPS_MINUTES = listOf(0, 5, 15, 60, 180)
     const val DEFAULT_TRIGGER_GAP_MINUTES = 15
@@ -135,7 +135,7 @@ object Constants {
     const val PERCENTAGE_DIVISOR = 100f
     const val GL_ES_VERSION = 2
 
-    // Live auto-pan (fork plan 4.2). A sweep is one pass from one edge of the image to the other.
+    // Live auto-pan. A sweep is one pass from one edge of the image to the other.
     const val DEFAULT_AUTO_PAN_SWEEP_SECONDS = 60
     /** The speed slider's stops, slowest first. */
     val AUTO_PAN_SWEEP_STEPS_SECONDS = listOf(300, 180, 120, 90, 60, 45, 30, 20, 15, 10)
@@ -225,7 +225,7 @@ object PreferenceKeys {
     // Behavior
     const val ADAPTIVE_BRIGHTNESS = "adaptive_brightness"
 
-    // Smarter scheduling (fork plan, Phase 6)
+    // Smarter scheduling
     const val ONLY_WHILE_CHARGING = "only_while_charging"
     const val PAUSE_IN_BATTERY_SAVER = "pause_in_battery_saver"
     const val CHANGE_ON_SCREEN_OFF = "change_on_screen_off"

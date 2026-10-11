@@ -120,8 +120,8 @@ class ScheduleSettingsTest {
             assertTrue("Display: $edited", current.hasDisplayChanges(edited))
             assertFalse("Scheduling: $edited", current.hasSchedulingChanges(edited))
         }
-        // Adaptive brightness also starts or stops the dark-theme checks (plan 6.3); updating the
-        // schedules keeps every existing countdown.
+        // Adaptive brightness also starts or stops the dark-theme checks; updating the schedules
+        // keeps every existing countdown.
         current.copy(adaptiveBrightness = true).let { edited ->
             assertTrue(current.hasDisplayChanges(edited))
             assertTrue(current.hasSchedulingChanges(edited))

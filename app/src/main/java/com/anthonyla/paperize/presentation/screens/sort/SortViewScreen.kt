@@ -318,7 +318,7 @@ private fun WallpaperSortCard(wallpaper: Wallpaper, modifier: Modifier = Modifie
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                // Excluded images keep their place in the order but are skipped (plan 5.2).
+                // Excluded images keep their place in the order but are skipped.
                 if (wallpaper.excluded) {
                     Text(
                         text = stringResource(R.string.state_excluded),

@@ -5,7 +5,7 @@ import com.anthonyla.paperize.domain.model.Album
 import com.anthonyla.paperize.domain.model.Wallpaper
 import com.anthonyla.paperize.presentation.common.util.UiText
 
-/** Which images an album or folder view shows (plan 5.2). */
+/** Which images an album or folder view shows. */
 enum class ImageFilter {
     ALL,
 

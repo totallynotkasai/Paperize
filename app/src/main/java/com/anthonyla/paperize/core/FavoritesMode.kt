@@ -1,6 +1,6 @@
 package com.anthonyla.paperize.core
 
-/** How an album treats its favourite images (plan 5.2). Stored per album since schema v5. */
+/** How an album treats its favourite images. Stored per album since schema v5. */
 enum class FavoritesMode {
     /** Favourites are only a marker for filtering the album view. */
     MARKER_ONLY,

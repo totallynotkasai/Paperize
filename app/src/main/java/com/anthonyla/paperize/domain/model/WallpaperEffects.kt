@@ -26,9 +26,9 @@ data class WallpaperEffects(
     val autoPanSweepSeconds: Int = Constants.DEFAULT_AUTO_PAN_SWEEP_SECONDS
 ) {
     /**
-     * These effects with an album's own visual effects in place of this screen's (plan 5.3). The
-     * live wallpaper's interactive settings (double-tap, screen off, parallax, auto-pan) belong to
-     * the screen, not the album, so they are kept.
+     * These effects with an album's own visual effects in place of this screen's. The live
+     * wallpaper's interactive settings (double-tap, screen off, parallax, auto-pan) belong to the
+     * screen, not the album, so they are kept.
      */
     fun withAlbumEffects(album: WallpaperEffects?): WallpaperEffects = if (album == null) this else copy(
         enableBlur = album.enableBlur,

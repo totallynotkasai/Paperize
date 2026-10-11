@@ -12,7 +12,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** What the change service does with each start (plans 3.4 and 3.12). */
+/** What the change service does with each start. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChangeServiceStartsTest {
     private val handled = mutableListOf<Pair<WallpaperRequest, Boolean>>()

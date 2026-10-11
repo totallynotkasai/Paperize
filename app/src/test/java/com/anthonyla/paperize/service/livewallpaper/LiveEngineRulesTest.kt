@@ -13,7 +13,7 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The live wallpaper engines' decisions (plans 1.5–1.7, 2.11, 6.1, 6.4). */
+/** The live wallpaper engines' decisions. */
 class LiveEngineRulesTest {
 
     /** A stand-in for an engine: what the system says about it. */
@@ -124,7 +124,7 @@ class LiveEngineRulesTest {
     @Test fun `screen off changes the wallpaper once, on the leader, when automatic changes may happen`() {
         assertTrue(changesOnScreenOff(interactive, leader = true, automaticChangeAllowed = true))
         assertFalse(changesOnScreenOff(interactive, leader = false, automaticChangeAllowed = true))
-        // Paused, or held back by the battery settings (plan 6.1).
+        // Paused, or held back by the battery settings.
         assertFalse(changesOnScreenOff(interactive, leader = true, automaticChangeAllowed = false))
         val off = interactive.copy(liveEffects = WallpaperEffects(enableChangeOnScreenOff = false))
         assertFalse(changesOnScreenOff(off, leader = true, automaticChangeAllowed = true))

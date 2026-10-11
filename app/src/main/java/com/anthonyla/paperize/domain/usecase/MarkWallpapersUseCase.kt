@@ -9,9 +9,9 @@ import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 
 /**
- * Favourite and exclude images (plan 5.2), and keep the rotation rounds in progress in line, so a
- * change shows up from the next wallpaper change rather than the next round. The image currently
- * on screen stays until then.
+ * Favourite and exclude images, and keep the rotation rounds in progress in line, so a change shows
+ * up from the next wallpaper change rather than the next round. The image currently on screen stays
+ * until then.
  */
 class MarkWallpapersUseCase @Inject constructor(
     private val albumRepository: AlbumRepository,

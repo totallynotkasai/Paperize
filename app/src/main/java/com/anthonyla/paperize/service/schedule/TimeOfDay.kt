@@ -6,7 +6,7 @@ import com.anthonyla.paperize.domain.model.ScheduleSettings
 import java.time.LocalTime
 import java.time.ZonedDateTime
 
-/** Set times and day/night clock times are minutes after midnight, local time (plan 6.4). */
+/** Set times and day/night clock times are minutes after midnight, local time. */
 internal val ZonedDateTime.minuteOfDay: Int get() = hour * Constants.MINUTES_PER_HOUR + minute
 
 /**

@@ -52,8 +52,8 @@ import com.anthonyla.paperize.presentation.theme.AppSpacing
 import kotlinx.coroutines.launch
 
 /**
- * Album settings (plan 5.5): the album's name (5.1), what its favourites do (5.2) and its own
- * effects (5.3). Every change is saved straight away.
+ * Album settings: the album's name, what its favourites do and its own effects. Every change is
+ * saved straight away.
  *
  * [onEffectsChange] gets null when custom effects are turned off, and `defer = true` for slider
  * levels, whose re-render waits briefly for further edits. [startingEffects] seeds custom effects

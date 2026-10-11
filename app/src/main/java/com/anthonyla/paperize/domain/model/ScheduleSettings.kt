@@ -27,17 +27,17 @@ data class ScheduleSettings(
     val liveScalingType: ScalingType = ScalingType.FILL,
     val liveEffects: WallpaperEffects = WallpaperEffects(),
     val adaptiveBrightness: Boolean = false,
-    // Plan 6.1: automatic changes (not manual ones) can wait for a charger or pause in battery saver.
+    // Automatic changes (not manual ones) can wait for a charger or pause in battery saver.
     val onlyWhileCharging: Boolean = false,
     val pauseInBatterySaver: Boolean = false,
-    // Plan 6.2: static mode can also change when the screen turns off or the phone is unlocked.
+    // Static mode can also change when the screen turns off or the phone is unlocked.
     val changeOnScreenOff: Boolean = false,
     val screenOffTarget: ScreenType = ScreenType.BOTH,
     val changeOnUnlock: Boolean = false,
     val unlockTarget: ScreenType = ScreenType.HOME,
     /** Screen-off and unlock leave a screen alone if it changed less than this long ago. */
     val triggerGapMinutes: Int = Constants.DEFAULT_TRIGGER_GAP_MINUTES,
-    // Plan 6.4: set times instead of an interval, and night albums.
+    // Set times instead of an interval, and night albums.
     val scheduleType: ScheduleType = ScheduleType.INTERVAL,
     /** Minutes after midnight, sorted, for [ScheduleType.TIMES]. */
     val changeTimes: List<Int> = Constants.DEFAULT_CHANGE_TIMES,
@@ -62,7 +62,7 @@ data class ScheduleSettings(
     /**
      * The album a screen rotates right now, or null while that screen is turned off. Turning a
      * screen off keeps its album, so every reader must go through this rather than the raw album
-     * IDs. At night a screen with a night album rotates that one instead (plan 6.4).
+     * IDs. At night a screen with a night album rotates that one instead.
      */
     fun albumFor(screen: ScreenType): String? = when (screen) {
         ScreenType.HOME -> dayOrNight(homeAlbumId, homeNightAlbumId)?.takeIf { homeEnabled }
@@ -175,8 +175,8 @@ data class ScheduleSettings(
 
     /**
      * Whether [screen]'s wallpaper is drawn differently, so its current image needs a re-render.
-     * [albumHasOwnEffects]: the screen's album uses its own effects (plan 5.3), so the screen's
-     * effects don't show and changing them changes nothing.
+     * [albumHasOwnEffects]: the screen's album uses its own effects, so the screen's effects don't
+     * show and changing them changes nothing.
      */
     fun hasDisplayChanges(other: ScheduleSettings, screen: ScreenType, albumHasOwnEffects: Boolean = false): Boolean = when (screen) {
         ScreenType.HOME -> homeScalingType != other.homeScalingType ||

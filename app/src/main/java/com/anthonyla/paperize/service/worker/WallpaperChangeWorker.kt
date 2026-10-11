@@ -41,7 +41,7 @@ class WallpaperChangeWorker @AssistedInject constructor(
                 val block = conditions.automaticChangeBlock(settings)
                 when {
                     screenType !in scheduledScreens(settings, settingsRepository.getWallpaperMode()) -> null
-                    // Battery saver is checked here; "Only while charging" is also a job constraint (plan 6.1).
+                    // Battery saver is checked here; "Only while charging" is also a job constraint.
                     block != null -> {
                         Log.d(TAG, "Skipping this change for $screenType: $block")
                         WallpaperChangeOutcome()

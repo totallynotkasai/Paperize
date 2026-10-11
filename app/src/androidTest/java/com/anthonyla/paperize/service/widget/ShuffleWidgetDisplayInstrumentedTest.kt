@@ -19,7 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Inflates the Shuffle widgets' real layouts as a launcher would, in every state (plan 4.1).
+ * Inflates the Shuffle widgets' real layouts as a launcher would, in every state.
  * Builds views only: placed widgets are not redrawn and no wallpaper changes.
  */
 @RunWith(AndroidJUnit4::class)

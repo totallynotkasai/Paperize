@@ -28,7 +28,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 
-/** The album refresh: daily at 3 AM, and on opening the app at most every few hours (plan 2.8). */
+/** The album refresh: daily at 3 AM, and on opening the app at most every few hours. */
 class AlbumRefreshWorkerTest {
     private val editor = mockk<SharedPreferences.Editor>(relaxed = true)
     private val history = mockk<SharedPreferences>(relaxed = true) { every { edit() } returns editor }

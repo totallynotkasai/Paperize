@@ -13,7 +13,7 @@ import com.anthonyla.paperize.presentation.common.components.AlbumNameDialog
 import com.anthonyla.paperize.presentation.screens.album_view.RenameOutcome
 import kotlinx.coroutines.launch
 
-/** Rename an album (plan 5.1). Names are unique regardless of case; the dialog says when one is taken. */
+/** Rename an album. Names are unique regardless of case; the dialog says when one is taken. */
 @Composable
 fun RenameAlbumDialog(
     currentName: String,

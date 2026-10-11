@@ -62,7 +62,7 @@ fun formatMinuteOfDay(context: Context, minuteOfDay: Int): String {
     return DateFormat.getTimeFormat(context).format(calendar.time)
 }
 
-/** "Interval" or "Set times" (plan 6.4), above the interval boxes or the list of times. */
+/** "Interval" or "Set times", above the interval boxes or the list of times. */
 @Composable
 fun ScheduleTypeChoice(
     selected: ScheduleType,

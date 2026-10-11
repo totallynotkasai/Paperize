@@ -31,7 +31,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
-/** The Phase 6 scheduling controls: set times on the Wallpaper tab, and the Scheduling Options screen. */
+/** The scheduling controls: set times on the Wallpaper tab, and the Scheduling Options screen. */
 class SchedulingUiInstrumentedTest {
     @get:Rule val compose = createComposeRule()
     private val context = ApplicationProvider.getApplicationContext<Context>()

@@ -15,7 +15,7 @@ sealed interface WallpaperRequest {
      * Move [screen] on to its next image. [keepSchedule] leaves the automatic countdown alone.
      * [followMode] (tile and shortcut) changes the live wallpaper instead while in live mode.
      * [automatic] (set times, day/night switch, screen off, unlock) happens only while changing is
-     * on and the battery conditions allow it (plan 6.1); manual changes always happen.
+     * on and the battery conditions allow it; manual changes always happen.
      */
     data class Change(
         val screen: ScreenType,

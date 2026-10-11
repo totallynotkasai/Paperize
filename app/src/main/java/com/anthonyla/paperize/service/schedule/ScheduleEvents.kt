@@ -31,14 +31,14 @@ class ScheduledRequests @Inject constructor(
 }
 
 /**
- * Set times, the day/night switch and dark-theme redraws (plans 6.3 and 6.4).
+ * Set times, the day/night switch and dark-theme redraws.
  *
  * The night albums are in use while [ScheduleSettings.nightActive] is set; this class is the only
- * thing that sets it. When it switches, each static screen with a night album changes to the
- * album now in use, as an automatic change: not while changing is paused or in battery saver (with
- * that setting on), and after plugging in with "Only while charging" (plan 6.1). If the switch
- * can't change a screen, its next change draws from the right album anyway. The live wallpaper
- * follows the album in use by itself.
+ * thing that sets it. When it switches, each static screen with a night album changes to the album
+ * now in use, as an automatic change: not while changing is paused or in battery saver (with that
+ * setting on), and after plugging in with "Only while charging". If the switch can't change a
+ * screen, its next change draws from the right album anyway. The live wallpaper follows the album
+ * in use by itself.
  */
 @Singleton
 class ScheduleEvents @Inject constructor(
@@ -89,7 +89,7 @@ class ScheduleEvents @Inject constructor(
         val changedNow = if (switched) requestChange(nightAlbumScreens(settings, mode), updated, "dark theme switch") else emptySet()
         if (switched) replanJobs(updated, mode)
         // Redrawing keeps the image, so it isn't held back like a change: it happens while paused
-        // too, as effect edits do (plan 2.3).
+        // too, as effect edits do.
         val redraw = screensToRedraw(updated, mode, dark) - changedNow
         requestScreenFor(redraw)?.let {
             Log.d(TAG, "Redrawing $it for the ${if (dark) "dark" else "light"} theme")

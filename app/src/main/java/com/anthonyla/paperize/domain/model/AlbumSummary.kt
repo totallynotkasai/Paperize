@@ -13,6 +13,6 @@ data class AlbumSummary(
     val folderCount: Int,
     val createdAt: Long,
     val modifiedAt: Long,
-    /** The album has its own effects, which replace the screen's (plan 5.3). */
+    /** The album has its own effects, which replace the screen's. */
     val hasCustomEffects: Boolean = false
 )

@@ -151,7 +151,7 @@ fun WallpaperScreen(
         ScalingType.STRETCH to stringResource(R.string.stretch),
         ScalingType.NONE to stringResource(R.string.none)
     )
-    // Albums shown right now that use their own effects instead of these (plan 5.3).
+    // Albums shown right now that use their own effects instead of these.
     val albumsWithOwnEffects = remember(albums, scheduleSettings, wallpaperMode) {
         val shown = if (wallpaperMode == WallpaperMode.LIVE) listOfNotNull(scheduleSettings.liveAlbumId)
             else listOfNotNull(scheduleSettings.albumFor(ScreenType.HOME), scheduleSettings.albumFor(ScreenType.LOCK))
@@ -355,7 +355,7 @@ fun WallpaperScreen(
                         enabled = true,
                         onSelect = { updateSettingsImmediate(scheduleSettings.copy(liveScalingType = it)) }
                     )
-                    // Each static screen keeps its own scaling (plan 5.4); with both on, each gets a row.
+                    // Each static screen keeps its own scaling; with both on, each gets a row.
                     bothEnabled -> {
                         ScreenLabel(stringResource(R.string.home))
                         ScalingChoices(

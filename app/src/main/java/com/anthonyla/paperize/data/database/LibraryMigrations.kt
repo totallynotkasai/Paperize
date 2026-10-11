@@ -42,8 +42,8 @@ val LIBRARY_MIGRATIONS: Array<Migration> = (1..3).map { version ->
 }.toTypedArray()
 
 /**
- * Version 5 adds every column the fork's plan needs, so later phases need no schema change:
- * per-image exclude, favourite and lost-access flags, and per-album effects and favourites mode.
+ * Version 5 adds every column the fork's features use, in one schema change: per-image exclude,
+ * favourite and lost-access flags, and per-album effects and favourites mode.
  */
 val MIGRATION_4_5: Migration = object : Migration(4, 5) {
     override fun migrate(db: SupportSQLiteDatabase) {

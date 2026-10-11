@@ -19,7 +19,7 @@ class WallpaperRenderer @Inject constructor(
     private val albumRepository: AlbumRepository,
     private val scheduleState: ScheduleState
 ) {
-    /** An album with its own effects uses them on every screen it is shown on (plan 5.3). */
+    /** An album with its own effects uses them on every screen it is shown on. */
     suspend fun render(wallpaper: Wallpaper, screen: ScreenType, settings: ScheduleSettings): Bitmap? {
         currentCoroutineContext().ensureActive()
         val screenEffects = when (screen) {
@@ -50,7 +50,7 @@ class WallpaperRenderer @Inject constructor(
                 val adjusted = adaptiveBrightnessAdjustment(context, bitmap)
                 if (adjusted !== bitmap) bitmap.recycle()
                 bitmap = adjusted
-                // So a later switch of the dark theme knows this screen needs drawing again (plan 6.3).
+                // So a later switch of the dark theme knows this screen needs drawing again.
                 scheduleState.recordRendered(screen.staticScreens(), isSystemDarkTheme(context))
             }
             currentCoroutineContext().ensureActive()

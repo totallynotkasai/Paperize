@@ -268,7 +268,7 @@
   <string name="app_info">应用信息</string>
   <string name="effects_need_a_screen">请先在上方开启主屏幕或锁屏，再更改效果。</string>
 
-  <!-- UI polish (fork plan 3.2–3.6, 3.13) -->
+  <!-- UI polish -->
   <string name="theme">主题</string>
   <string name="theme_description">跟随手机设置，或始终使用浅色或深色。</string>
   <string name="theme_system">跟随系统</string>
@@ -373,7 +373,7 @@
   </plurals>
   <string name="count_with_excluded">%1$s · %2$s</string>
   <string name="error_all_wallpapers_excluded">此相册中的所有图片都已排除在轮换之外。请在 Paperized 中恢复部分图片以继续更换。</string>
-  <!-- Phase 6: smarter scheduling -->
+  <!-- Smarter scheduling -->
   <string name="notification_channel_listener">熄屏和解锁时更换</string>
   <string name="notification_channel_listener_description">Paperized 等待屏幕关闭或手机解锁时，Android 需要显示此通知。你可以关闭它，更换仍会照常进行。</string>
   <string name="listener_notification_title">准备更换壁纸</string>

@@ -37,7 +37,7 @@ interface SettingsRepository {
 
     suspend fun updateLiveAlbumId(albumId: String?)
 
-    /** A night album for [screen] (plan 6.4); null removes it. */
+    /** A night album for [screen]; null removes it. */
     suspend fun updateNightAlbumId(screen: ScreenType, albumId: String?)
 
     /** Switch between the day and night albums; returns whether the stored value changed. */

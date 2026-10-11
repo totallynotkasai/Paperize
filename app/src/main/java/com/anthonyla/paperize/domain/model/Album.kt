@@ -10,7 +10,7 @@ data class Album(
     val folders: List<Folder> = emptyList(),
     val createdAt: Long = System.currentTimeMillis(),
     val modifiedAt: Long = System.currentTimeMillis(),
-    /** Overrides the Home, Lock and Live effects wherever this album is shown (plan 5.3). */
+    /** Overrides the Home, Lock and Live effects wherever this album is shown. */
     val effects: WallpaperEffects? = null,
     val favoritesMode: FavoritesMode = FavoritesMode.MARKER_ONLY
 )

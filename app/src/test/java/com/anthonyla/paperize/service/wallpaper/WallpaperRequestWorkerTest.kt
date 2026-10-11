@@ -12,7 +12,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** The background job that runs a request Android wouldn't start the service for (plan 3.12). */
+/** The background job that runs a request Android wouldn't start the service for. */
 class WallpaperRequestWorkerTest {
     private val handler = mockk<WallpaperRequestHandler>(relaxed = true)
 

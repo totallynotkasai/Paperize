@@ -62,11 +62,11 @@ internal fun screensForEvent(
 }
 
 /**
- * Static mode's screen-off and unlock changes (plan 6.2). Android tells only running apps about
- * these events, so this foreground service listens while either is turned on. Android requires a
- * notification. Its channel asks for minimum importance, but Android raises a foreground service's
- * channel to low (silent, with a status-bar icon), so the app offers a one-tap way to turn the
- * channel off; the service keeps running without it (decision D).
+ * Static mode's screen-off and unlock changes. Android tells only running apps about these events,
+ * so this foreground service listens while either is turned on. Android requires a notification.
+ * Its channel asks for minimum importance, but Android raises a foreground service's channel to low
+ * (silent, with a status-bar icon), so the app offers a one-tap way to turn the channel off; the
+ * service keeps running without it.
  */
 @AndroidEntryPoint
 class ScreenEventService : Service() {
@@ -143,8 +143,8 @@ class ScreenEventService : Service() {
         val screens = screensForEvent(event, settings, mode, System.currentTimeMillis(), scheduleState::lastChangedAt)
         val screen = requestScreenFor(screens) ?: return
         Log.d(TAG, "$event: changing $screen")
-        // An automatic change: skipped while paused or held back by the battery settings (plan 6.1).
-        // Like double-tap on the live wallpaper (plan 2.11), it restarts the interval countdown.
+        // An automatic change: skipped while paused or held back by the battery settings.
+        // Like double-tap on the live wallpaper, it restarts the interval countdown.
         handler.handle(WallpaperRequest.Change(screen, automatic = true), report = false)
     }
 

@@ -8,8 +8,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Small bookkeeping for Phase 6, kept apart from the user's settings: when each static screen last
- * changed (for the screen-off / unlock gap), which theme each was last drawn for (to redraw
+ * Small bookkeeping for scheduling, kept apart from the user's settings: when each static screen
+ * last changed (for the screen-off / unlock gap), which theme each was last drawn for (to redraw
  * adaptive brightness when the theme switches), and when set times were last checked.
  */
 @Singleton

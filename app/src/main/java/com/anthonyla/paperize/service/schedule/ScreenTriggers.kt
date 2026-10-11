@@ -16,9 +16,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
- * Starts and stops [ScreenEventService] as the settings call for it (plan 6.2). Android lets an app
- * start a foreground service only from the foreground and a few moments such as a restart, so a
- * start from the background may be refused; opening Paperize or restarting the phone tries again.
+ * Starts and stops [ScreenEventService] as the settings call for it. Android lets an app start a
+ * foreground service only from the foreground and a few moments such as a restart, so a start from
+ * the background may be refused; opening Paperize or restarting the phone tries again.
  */
 @Singleton
 class ScreenTriggers @Inject constructor(

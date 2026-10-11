@@ -34,17 +34,16 @@ import kotlinx.coroutines.launch
 
 /**
  * Whether anything depends on the dark theme while Paperize isn't running: static adaptive
- * brightness (plan 6.3; the live wallpaper redraws by itself) or night albums that follow the
- * dark theme (plan 6.4).
+ * brightness (the live wallpaper redraws by itself) or night albums that follow the dark theme.
  */
 internal fun watchesDarkTheme(settings: ScheduleSettings, mode: WallpaperMode): Boolean =
     (mode == WallpaperMode.STATIC && settings.adaptiveBrightness && settings.rotatingStaticScreens().isNotEmpty()) ||
         (settings.nightTrigger == NightTrigger.DARK_MODE && settings.screensWithNightAlbum(mode).isNotEmpty())
 
 /**
- * Notices dark-theme switches while Paperize isn't running (plan 6.3). Switching the theme by hand
- * writes a system setting, which [DarkThemeJobService] watches, so that is noticed within seconds.
- * A schedule (sunset, set hours, bedtime) switches the theme without writing anything, so a light
+ * Notices dark-theme switches while Paperize isn't running. Switching the theme by hand writes a
+ * system setting, which [DarkThemeJobService] watches, so that is noticed within seconds. A
+ * schedule (sunset, set hours, bedtime) switches the theme without writing anything, so a light
  * check every 15 minutes catches those. While Paperize runs, the application hears of every switch
  * at once.
  */

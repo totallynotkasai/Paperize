@@ -37,7 +37,7 @@ internal fun nextTimedEvent(settings: ScheduleSettings, mode: WallpaperMode, now
 }
 
 /**
- * One inexact alarm for the next set time or clock day/night switch (plan 6.4). Inexact alarms need
+ * One inexact alarm for the next set time or clock day/night switch. Inexact alarms need
  * no special permission and let Android save battery: it fires within [Constants.TIMED_ALARM_WINDOW_MS]
  * after the time while the phone is in use; while it sleeps untouched, Android may hold it until it
  * next wakes up. Each alarm arms the next one; restarts and time-zone changes re-arm it.

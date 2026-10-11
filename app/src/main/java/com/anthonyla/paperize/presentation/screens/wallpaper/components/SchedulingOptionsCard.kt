@@ -34,8 +34,8 @@ internal fun schedulingOptionsSummary(settings: ScheduleSettings, mode: Wallpape
 }
 
 /**
- * Opens the scheduling options (plan 6.1, 6.2 and the night albums of 6.4); says which are on, or
- * what is there while none are.
+ * Opens the scheduling options (screen-off and unlock changes, night albums and the battery
+ * conditions); says which are on, or what is there while none are.
  */
 @Composable
 fun SchedulingOptionsCard(

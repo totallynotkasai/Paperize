@@ -67,7 +67,7 @@ class Migration4To5InstrumentedTest {
                 db.execSQL("INSERT INTO wallpapers (id, albumId, folderId, uri, fileName, dateModified, displayOrder, sourceType, addedAt, mediaType) VALUES ('other-image', 'other', NULL, 'content://other', 'c.jpg', 13, 0, 'DIRECT', 14, 'IMAGE')")
                 db.execSQL("INSERT INTO wallpaper_queue VALUES (2, 'album', 'folder-image', 'LIVE', 0, 15)")
                 db.execSQL("INSERT INTO wallpaper_current VALUES ('other', 'LIVE', 'other-image', 16)")
-                // 4.2.0 could record one image for both screens; Phase 3 stopped reading these.
+                // 4.2.0 could record one image for both screens; these are no longer read.
                 db.execSQL("INSERT INTO wallpaper_current VALUES ('album', 'BOTH', 'folder-image', 17)")
             }
             val db = Room.databaseBuilder(context, PaperizeDatabase::class.java, name)

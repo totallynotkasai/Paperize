@@ -68,7 +68,7 @@ class WallpaperScheduler @Inject constructor(
             .setInputData(inputData)
             .addTag(getWorkTag(screenType))
             .apply {
-                // "Only while charging" (plan 6.1): a change that falls due unplugged waits for the charger.
+                // "Only while charging": a change that falls due unplugged waits for the charger.
                 if (requiresCharging) setConstraints(Constraints.Builder().setRequiresCharging(true).build())
                 // New periodic work otherwise runs immediately. Unlike an initial delay, this
                 // one-run deadline also survives unrelated UPDATE requests from settings edits.

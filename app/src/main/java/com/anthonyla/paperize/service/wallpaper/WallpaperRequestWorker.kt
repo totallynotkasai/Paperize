@@ -49,10 +49,10 @@ class WallpaperRequestWorker @AssistedInject constructor(
         }
 
         /**
-         * An automatic change from a set time or the day/night switch (plan 6.4). With "Only while
-         * charging" it waits for the charger, like the interval jobs do; otherwise it runs at once.
-         * While one for the same screens is still waiting, another adds nothing, so times missed
-         * while unplugged come to one change once the phone is plugged in.
+         * An automatic change from a set time or the day/night switch. With "Only while charging"
+         * it waits for the charger, like the interval jobs do; otherwise it runs at once. While one
+         * for the same screens is still waiting, another adds nothing, so times missed while
+         * unplugged come to one change once the phone is plugged in.
          */
         fun enqueueAutomatic(context: Context, request: WallpaperRequest.Change, requiresCharging: Boolean) {
             Log.d(TAG, "Queueing automatic $request (waits for charger: $requiresCharging)")
@@ -73,8 +73,8 @@ class WallpaperRequestWorker @AssistedInject constructor(
         }
 
         /**
-         * Redraw [screen]'s current image after the dark theme switched (plan 6.3). Several checks
-         * may notice the same switch; while one redraw waits, the others add nothing.
+         * Redraw [screen]'s current image after the dark theme switched. Several checks may notice
+         * the same switch; while one redraw waits, the others add nothing.
          */
         fun enqueueRedraw(context: Context, screen: ScreenType) {
             Log.d(TAG, "Queueing a theme redraw of $screen")

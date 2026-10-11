@@ -33,7 +33,7 @@ import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 
-/** The periodic job behind interval changes (plans 1.8, 2.1 and 6.1). */
+/** The periodic job behind interval changes. */
 class WallpaperChangeWorkerTest {
     private val controller = mockk<WallpaperController>()
     private val settings = mockk<SettingsRepository>()
@@ -85,9 +85,9 @@ class WallpaperChangeWorkerTest {
     @Test fun `a job the settings no longer call for changes nothing and cancels itself`() = runTest {
         listOf(
             current.copy(enableChanger = false),
-            // Turned off, it keeps its album but isn't scheduled (plan 2.1).
+            // Turned off, it keeps its album but isn't scheduled.
             current.copy(homeEnabled = false),
-            // Set times use alarms instead (plan 6.4).
+            // Set times use alarms instead.
             current.copy(scheduleType = ScheduleType.TIMES)
         ).forEach { settings ->
             current = settings

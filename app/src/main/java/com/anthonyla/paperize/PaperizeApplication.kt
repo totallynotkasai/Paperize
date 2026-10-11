@@ -55,12 +55,12 @@ class PaperizeApplication : Application(), WorkConfiguration.Provider, DefaultLi
         // Placed widgets grey out while their screen can't change, and back again once it can.
         shuffleWidgets.keepInStep()
 
-        // The screen-off / unlock listener runs while those changes are turned on (plan 6.2).
+        // The screen-off / unlock listener runs while those changes are turned on.
         screenTriggers.keepInStep()
 
         // Android drops alarms when an app is stopped or updated, so every start re-arms set times
-        // and catches up one that was missed (plan 6.4), and a dark-theme switch Paperize missed while
-        // it was stopped (plan 6.3).
+        // and catches up one that was missed, and a dark-theme switch Paperize missed while it was
+        // stopped.
         appScope.launch {
             runCatchingLogged("re-arm set times") { scheduleEvents.onTimeEvent() }
             runCatchingLogged("follow the dark theme") { scheduleEvents.onDarkThemeMaybeChanged() }
@@ -122,7 +122,7 @@ class PaperizeApplication : Application(), WorkConfiguration.Provider, DefaultLi
         appScope.launch { runCatchingLogged("start the screen-event listener") { screenTriggers.sync() } }
     }
 
-    /** While Paperize runs it hears of a dark-theme switch at once (plan 6.3). */
+    /** While Paperize runs it hears of a dark-theme switch at once. */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         val dark = isDarkTheme(newConfig)

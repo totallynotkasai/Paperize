@@ -13,8 +13,8 @@ import com.anthonyla.paperize.R
 import com.anthonyla.paperize.presentation.screens.album_view.SelectionMarks
 
 /**
- * Selection bar toggles for the selected images (plan 5.2). Each shows whether every selected image
- * already has the mark: filled when it does, so a tap takes it away again; outlined otherwise.
+ * Selection bar toggles for the selected images. Each shows whether every selected image already
+ * has the mark: filled when it does, so a tap takes it away again; outlined otherwise.
  */
 @Composable
 internal fun MarkToggles(

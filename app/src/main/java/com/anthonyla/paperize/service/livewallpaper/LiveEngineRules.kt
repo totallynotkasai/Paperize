@@ -53,20 +53,20 @@ internal class EngineRoster<E : Any>(
     fun followers(): List<E> = attached.filterNot { it === leader }
 }
 
-/** Previews and followers only look; the leader takes what is pending (plan 1.7). */
+/** Previews and followers only look; the leader takes what is pending. */
 internal fun liveSelectionFor(preview: Boolean, leader: Boolean, pending: LiveSelection): LiveSelection =
     if (preview || !leader) LiveSelection.PEEK else pending
 
 /**
- * Whether an engine records [shownId] as the live wallpaper's current image (plan 1.5): only the
- * leader, only once the image is on screen, only an image it took from the queue, and only once.
+ * Whether an engine records [shownId] as the live wallpaper's current image: only the leader, only
+ * once the image is on screen, only an image it took from the queue, and only once.
  */
 internal fun recordsShownImage(leader: Boolean, selection: LiveSelection, recordedId: String?, shownId: String): Boolean =
     leader && selection != LiveSelection.PEEK && recordedId != shownId
 
 /**
  * Whether the leader runs the short-interval timer: intervals under WorkManager's 15 minutes run
- * on the visible engine while changing is on (plan 6.1 then decides each turn).
+ * on the visible engine while changing is on (the battery conditions then decide each turn).
  */
 internal fun runsLiveTimer(visible: Boolean, leader: Boolean, mode: WallpaperMode, settings: ScheduleSettings): Boolean =
     visible &&
@@ -78,9 +78,9 @@ internal fun runsLiveTimer(visible: Boolean, leader: Boolean, mode: WallpaperMod
         usesVisibleLiveTimer(settings.liveIntervalMinutes)
 
 /**
- * Whether turning the screen off changes the live wallpaper. It is an automatic change, so it
- * waits while changing is paused or the battery settings hold changes back (plans 6.1 and 6.4);
- * [automaticChangeAllowed] says whether they do. Only the leader changes, once.
+ * Whether turning the screen off changes the live wallpaper. It is an automatic change, so it waits
+ * while changing is paused or the battery settings hold changes back; [automaticChangeAllowed] says
+ * whether they do. Only the leader changes, once.
  */
 internal fun changesOnScreenOff(settings: ScheduleSettings, leader: Boolean, automaticChangeAllowed: Boolean): Boolean =
     settings.liveEffects.enableChangeOnScreenOff && leader && automaticChangeAllowed

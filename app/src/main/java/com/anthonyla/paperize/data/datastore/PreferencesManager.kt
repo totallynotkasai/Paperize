@@ -256,7 +256,7 @@ class PreferencesManager @Inject constructor(
         if (value != null) this[stringPreferencesKey(key)] = value else remove(stringPreferencesKey(key))
     }
 
-    /** A night album for [screen] (plan 6.4); null removes it. */
+    /** A night album for [screen]; null removes it. */
     suspend fun updateNightAlbumId(screen: ScreenType, albumId: String?) {
         val key = when (screen) {
             ScreenType.HOME -> PreferenceKeys.HOME_NIGHT_ALBUM_ID
@@ -323,7 +323,7 @@ class PreferencesManager @Inject constructor(
 
     suspend fun clearEmptyAlbumSelection(albumId: String, screen: ScreenType) {
         dataStore.edit { prefs ->
-            // The empty album may be the screen's night album (plan 6.4).
+            // The empty album may be the screen's night album.
             val targets = when (screen) {
                 ScreenType.HOME -> listOf(PreferenceKeys.HOME_ALBUM_ID, PreferenceKeys.HOME_NIGHT_ALBUM_ID)
                 ScreenType.LOCK -> listOf(PreferenceKeys.LOCK_ALBUM_ID, PreferenceKeys.LOCK_NIGHT_ALBUM_ID)

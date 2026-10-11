@@ -9,7 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Why an automatic change has to wait (plan 6.1). */
+/** Why an automatic change has to wait. */
 enum class ChangeBlock { NOT_CHARGING, BATTERY_SAVER }
 
 /**

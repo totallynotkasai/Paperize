@@ -87,7 +87,7 @@ class WallpaperRequestHandler @Inject constructor(
         }
     }
 
-    /** Why an automatic change can't happen now: changing is paused, or a battery condition (plan 6.1). */
+    /** Why an automatic change can't happen now: changing is paused, or a battery condition. */
     private fun automaticSkipReason(settings: ScheduleSettings): String? =
         if (!settings.enableChanger) "changing is paused" else conditions.automaticChangeBlock(settings)?.name
 

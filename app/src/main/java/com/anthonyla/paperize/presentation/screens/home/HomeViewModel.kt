@@ -238,7 +238,7 @@ class HomeViewModel @Inject constructor(
                     nightActive = current.nightActive
                 ).validate()
             }
-            // New night hours, trigger or screens may put the other albums in use now (plan 6.4).
+            // New night hours, trigger or screens may put the other albums in use now.
             if (validated.hasSchedulingChanges(currentSettings) && scheduleEvents.syncNightAlbums()) {
                 validated = settingsRepository.getScheduleSettings()
             }
@@ -326,8 +326,8 @@ class HomeViewModel @Inject constructor(
             .filterTo(mutableSetOf()) { after.albumFor(it) != before.albumFor(it) }
 
     /**
-     * A night album for [screen] (plan 6.4), or null for none. If it is in use now (it is night), the
-     * screen changes to it at once, like picking an album; the live wallpaper follows by itself.
+     * A night album for [screen], or null for none. If it is in use now (it is night), the screen
+     * changes to it at once, like picking an album; the live wallpaper follows by itself.
      */
     fun selectNightAlbum(screen: ScreenType, album: AlbumSummary?) {
         launchSettingsUpdate {
